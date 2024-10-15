@@ -13,7 +13,7 @@
 {#if isStudent}
   <h2>Chào {student.username}!</h2>
   <h1>Student Dashboard</h1>
-  <a href="/student/profile">Profile</a>
+  <a href="/profile">Profile</a>
 {:else}
   <h2>You do not have permission to access this page.</h2>
 {/if}

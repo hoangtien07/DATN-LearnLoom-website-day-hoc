@@ -1,19 +1,20 @@
 <!-- frontend/src/routes/admin/[id]/delete/+page.svelte -->
 <script>
   import { onMount } from "svelte";
-  import { fetchCourseById, deleteCourse } from "$lib/js/api";
+  import { fetchCourseBySlug, deleteCourse } from "$lib/js/api";
   import { page } from "$app/stores";
 
   let course = {};
-  const id = $page.params.id;
+  const slug = $page.params.slug;
 
   onMount(async () => {
-    course = await fetchCourseById(id);
+    course = await fetchCourseBySlug(slug);
   });
 
   const handleDelete = async () => {
-    await deleteCourse(id);
-    window.location.href = "/admin/course";
+    console.log(course._id);
+    await deleteCourse(course._id);
+    window.location.href = "/";
   };
 </script>
 
@@ -21,7 +22,7 @@
 {#if course}
   <p>Are you sure you want to delete the course "{course.name}"?</p>
   <button on:click={handleDelete}>Yes, Delete</button>
-  <a href="/admin/course">Cancel</a>
+  <a href="/">Cancel</a>
 {:else}
   <p>Loading...</p>
 {/if}

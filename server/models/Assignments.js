@@ -1,31 +1,52 @@
+// Quiz Assignment
 import mongoose from "mongoose";
+const { Schema } = mongoose;
 
 const assignmentSchema = new mongoose.Schema(
   {
-    lesson: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Lesson",
-      required: true,
-    },
+    course: { type: Schema.Types.ObjectId, ref: "Course", required: true },
     name: { type: String, required: true },
-    type: { type: String, enum: ["question", "assignment"], required: true },
-    content: String, // for assignments
+    description: { type: String },
     questions: [
       {
-        question: String,
-        questionType: {
-          type: String,
-          enum: ["single", "multiple", "true-false"],
-          required: true,
-        },
-        options: [{ type: String }],
-        correctAnswer: String,
-        explanation: String,
+        questionText: { type: String },
+        options: [{ text: String, isCorrect: Boolean }],
+        explanation: { type: String },
       },
     ],
+    timer: { type: Number, default: null },
+    allowRetake: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
 const Assignment = mongoose.model("Assignment", assignmentSchema);
 export default Assignment;
+
+const assignmentResultSchema = new Schema({
+  assignment: {
+    type: Schema.Types.ObjectId,
+    ref: "Assignment",
+    required: true,
+  },
+  student: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  answers: [
+    {
+      questionId: { type: Schema.Types.ObjectId, required: true },
+      selectedOptions: {
+        userAnswer: [{ type: String }],
+        isCorrect: { type: Boolean, default: false },
+      },
+      explanation: { type: String },
+    },
+  ],
+  score: { type: Number, default: 0 },
+  total: { type: Number, default: 0 },
+  submittedAt: { type: Date, default: Date.now },
+});
+
+const AssignmentResult = mongoose.model(
+  "AssignmentResult",
+  assignmentResultSchema
+);
+export { AssignmentResult };

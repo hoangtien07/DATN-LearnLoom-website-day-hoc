@@ -21,24 +21,40 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["admin", "teacher", "student"],
+      enum: ["admin", "instructor", "student"],
       default: "student",
     },
     bio: String,
+    phone: String,
+    birthday: Date,
+    facebookUrl: {
+      type: String,
+    },
+    instaUrl: {
+      type: String,
+    },
+    youtubeUrl: {
+      type: String,
+    },
+    websiteUrl: {
+      type: String,
+    },
     enrolledCourses: [
       {
         courseId: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Course",
+          required: true,
         },
-        lessonsCompleted: [
-          {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Lesson",
-          },
-        ],
-        progressPercentage: { type: Number },
+        completedItems: [{ type: mongoose.Schema.Types.ObjectId }],
+        progress: { type: Number, default: 0 },
         lastAccessed: { type: Date },
+      },
+    ],
+    favoriteCourses: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Course",
       },
     ],
   },

@@ -4,7 +4,7 @@
 		Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 	--font-mono: 'Fira Mono', monospace;
 	--color-bg-0: rgb(202, 216, 228);
-	--color-bg-1: hsl(209, 36%, 86%);
+	--color-bg-1: #fff;
 	--color-bg-2: hsl(224, 44%, 95%);
 	--color-theme-1: #ff3e00;
 	--color-theme-2: #4075a6;
@@ -14,19 +14,22 @@
 	font-family: var(--font-body);
 	color: var(--color-text);
 }
-
+*{
+	font-family: "Inter", sans-serif;
+	font-size: 16px;
+}
 body {
 	min-height: 100vh;
 	margin: 0;
 	background-attachment: fixed;
-	background-color: var(--color-bg-1);
+	background-color: #fff;
 	background-size: 100vw 100vh;
-	background-image: radial-gradient(
+	/* background-image: radial-gradient(
 			50% 50% at 50% 50%,
 			rgba(255, 255, 255, 0.75) 0%,
 			rgba(255, 255, 255, 0) 100%
 		),
-		linear-gradient(180deg, var(--color-bg-0) 0%, var(--color-bg-1) 15%, var(--color-bg-2) 50%);
+		linear-gradient(180deg, var(--color-bg-0) 0%, var(--color-bg-1) 15%, var(--color-bg-2) 50%); */
 }
 
 h1,
@@ -66,7 +69,7 @@ pre {
 
 .text-column {
 	display: flex;
-	max-width: 48rem;
+	max-width: 1200px;
 	flex: 0.6;
 	flex-direction: column;
 	justify-content: center;
@@ -100,4 +103,22 @@ button,input{
 	position: absolute;
 	width: 1px;
 	white-space: nowrap;
+}
+
+/* Reset Css */
+li{
+	list-style: none;
+}
+a{
+	text-decoration: none;
+}
+button{
+	cursor: pointer;
+}
+input, button, textarea, select{
+	border: none;outline: none;
+}
+
+p{
+	margin-bottom: 0;
 }
