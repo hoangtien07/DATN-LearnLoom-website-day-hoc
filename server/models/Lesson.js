@@ -1,32 +1,52 @@
 import mongoose from "mongoose";
+const { Schema } = mongoose;
 
-const lessonSchema = new mongoose.Schema(
+// Base Lesson Schema
+const baseLessonSchema = new mongoose.Schema(
   {
-    course: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Course",
-      required: true,
-    },
+    course: { type: Schema.Types.ObjectId, ref: "Course", required: true },
     name: { type: String, required: true },
-    type: {
-      type: String,
-      enum: ["text", "video", "audio", "zoom", "meet"],
-      required: true,
-    },
-    resourceType: String, // for video, audio types
-    resourceURL: String, // for video, audio link
-    zoomURL: String,
-    meetURL: String,
-    duration: String,
-    allowPreview: { type: Boolean, default: false },
-    unlockAfter: Date,
-    description: String,
-    content: String,
-    materials: [{ type: String }], // URLs or paths to uploaded files
-    classroomRules: String,
+    description: { type: String },
+    duration: { type: Number }, // Duration in minutes
   },
-  { timestamps: true }
+  { timestamps: true, discriminatorKey: "type" }
 );
 
-const Lesson = mongoose.model("Lesson", lessonSchema);
-export default Lesson;
+// Text Lesson
+const TextLesson = baseLessonSchema.clone();
+TextLesson.add({
+  content: { type: String },
+});
+
+// Video Lesson
+const VideoLesson = baseLessonSchema.clone();
+VideoLesson.add({
+  videoUrl: { type: String },
+});
+
+// Audio Lesson
+const AudioLesson = baseLessonSchema.clone();
+AudioLesson.add({
+  audioUrl: { type: String },
+});
+
+// Live Lesson
+const LiveLesson = baseLessonSchema.clone();
+LiveLesson.add({
+  liveDate: { type: Date },
+  link: { type: String },
+});
+
+const Lesson = mongoose.model("Lesson", baseLessonSchema);
+const TextLessonModel = Lesson.discriminator("TextLesson", TextLesson);
+const VideoLessonModel = Lesson.discriminator("VideoLesson", VideoLesson);
+const AudioLessonModel = Lesson.discriminator("AudioLesson", AudioLesson);
+const LiveLessonModel = Lesson.discriminator("LiveLesson", LiveLesson);
+
+export {
+  Lesson,
+  TextLessonModel,
+  VideoLessonModel,
+  AudioLessonModel,
+  LiveLessonModel,
+};

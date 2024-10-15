@@ -11,6 +11,11 @@ import connectDB from "./config/db.js";
 import courseRoutes from "./routes/courseRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
+import commentRoutes from "./routes/commentRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
+import subjectRoutes from "./routes/subjectRoutes.js";
 // import teacherRoutes from "./routes/teacherRoutes.js";
 // import adminRoutes from "./routes/adminRoutes.js";
 import { isAuthenticated, checkRole } from "./middleware/isAuthenticated.js";
@@ -35,7 +40,7 @@ app.use(
   })
 );
 app.use(bodyParser.json());
-
+app.use(express.json());
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -43,7 +48,12 @@ app.use(passport.session());
 
 app.use("/auth", authRoutes);
 app.use("/api/courses", courseRoutes);
-app.use("/api/student", studentRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/comments", commentRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/subjects", subjectRoutes);
+// app.use("/api/student", studentRoutes);
 // app.use("/api/teacher", teacherRoutes);
 // app.use("/api/admin", adminRoutes);
 

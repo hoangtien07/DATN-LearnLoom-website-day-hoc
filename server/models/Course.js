@@ -2,10 +2,31 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
+const itemSchema = new mongoose.Schema({
+  itemType: {
+    type: String,
+    enum: ["lesson", "assignment"],
+    required: true,
+  },
+  itemId: {
+    type: Schema.Types.ObjectId,
+    refPath: "itemType", // Use "itemType" for dynamic referencing
+    required: true,
+  },
+  order: { type: Number, default: 0 },
+});
+
+const sectionSchema = new mongoose.Schema({
+  _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+  name: { type: String, required: true },
+  items: [itemSchema],
+});
+
 const courseSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    description: { type: String, required: true },
+    summary: { type: String, required: true },
+    description: { type: String },
     teacher: {
       type: Schema.Types.ObjectId,
       ref: "User",
@@ -14,20 +35,33 @@ const courseSchema = new mongoose.Schema(
     overviewVideo: { type: String },
     level: {
       type: String,
-      enum: ["beginner", "intermediate", "advanced"],
       required: true,
     },
+    subject: {
+      type: String,
+      required: true,
+    },
+    faqs: [
+      {
+        question: { type: String, required: true },
+        answer: { type: String, required: true },
+      },
+    ],
     totalLessons: { type: Number },
-    totalDuration: { type: String },
+    totalDuration: { type: Number },
     slug: {
       type: String,
       required: true,
       unique: true,
     },
-    // totalStudentsEnrolled: {
-    //   type: Number,
-    //   default: 0,
-    // },
+    totalStudentsEnrolled: {
+      type: Number,
+      default: 0,
+    },
+    avgRating: {
+      type: Number,
+      default: 0,
+    },
     visible: {
       type: Boolean,
       default: true,
@@ -45,11 +79,6 @@ const courseSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    is_pro: {
-      type: Boolean,
-      default: false,
-      required: true,
-    },
     is_published: {
       type: Boolean,
       required: true,
@@ -57,24 +86,18 @@ const courseSchema = new mongoose.Schema(
     is_selling: {
       type: Boolean,
       default: false,
-      required: true,
     },
     published_at: {
       type: Date,
-      required: true,
     },
-    chapters: [
-      {
-        name: { type: String, required: true },
-        lessons: [{ type: Schema.Types.ObjectId, ref: "Lesson" }],
-        quizzes: [{ type: Schema.Types.ObjectId, ref: "Quiz" }],
-        assignments: [{ type: Schema.Types.ObjectId, ref: "Assignment" }],
-      },
-    ],
+    sections: [sectionSchema],
     reviews: [{ type: Schema.Types.ObjectId, ref: "Review" }],
   },
   { timestamps: true }
 );
-
+// Create indexes after the schema definition
+// courseSchema.post("init", function () {
+//   this.createIndexes([{ key: { slug: 1 }, unique: true }]);
+// });
 const Course = mongoose.model("Course", courseSchema);
 export default Course;

@@ -11,13 +11,19 @@
 		"@sveltejs/kit": "^2.0.0",
 		"@sveltejs/vite-plugin-svelte": "^3.0.0",
 		"axios": "^1.7.2",
-		"svelte": "^4.2.7",
+		"svelte": "^4.2.19",
+		"svelte-dnd-action": "^0.9.50",
 		"vite": "^5.0.3"
 	},
 	"type": "module",
 	"dependencies": {
-		"bootstrap": "^5.3.3",
+		"@sveltestrap/sveltestrap": "^6.2.7",
+		"cl-editor": "^2.3.0",
+		"marked": "^14.0.0",
 		"sass": "^1.77.8",
-		"svelte-preprocess": "^6.0.2"
+		"svelte-paginate": "^0.1.0",
+		"svelte-preprocess": "^6.0.2",
+		"svelte-star-rating": "^2.0.1",
+		"uuid": "^10.0.0"
 	}
 }
