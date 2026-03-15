@@ -10,6 +10,19 @@ import {
 import Assignment from "../models/Assignments.js";
 import { AssignmentResult } from "../models/Assignments.js";
 import User from "../models/User.js";
+
+const normalizeTotalDuration = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return NaN;
+  }
+
+  return Math.round(parsed * 10) / 10;
+};
 // ------------------------------------
 // CRUD for Courses
 // ------------------------------------
@@ -40,6 +53,16 @@ export const createCourse = async (req, res) => {
       reviews,
     } = req.body;
 
+    const normalizedTotalDuration = normalizeTotalDuration(totalDuration);
+    if (
+      normalizedTotalDuration === null ||
+      Number.isNaN(normalizedTotalDuration)
+    ) {
+      return res.status(400).json({
+        message: "totalDuration phải là số giờ lớn hơn 0",
+      });
+    }
+
     // Kiểm tra giáo viên có tồn tại
     const teacherExists = await User.findById(teacher);
     if (!teacherExists) {
@@ -55,7 +78,7 @@ export const createCourse = async (req, res) => {
       level,
       subject,
       totalLessons,
-      totalDuration,
+      totalDuration: normalizedTotalDuration,
       slug,
       totalStudentsEnrolled,
       visible,
@@ -79,12 +102,29 @@ export const createCourse = async (req, res) => {
 // Update a course
 export const updateCourse = async (req, res) => {
   try {
+    if (Object.prototype.hasOwnProperty.call(req.body, "totalDuration")) {
+      const normalizedTotalDuration = normalizeTotalDuration(
+        req.body.totalDuration,
+      );
+
+      if (
+        normalizedTotalDuration === null ||
+        Number.isNaN(normalizedTotalDuration)
+      ) {
+        return res.status(400).json({
+          message: "totalDuration phải là số giờ lớn hơn 0",
+        });
+      }
+
+      req.body.totalDuration = normalizedTotalDuration;
+    }
+
     const course = await Course.findOneAndUpdate(
       { slug: req.params.slug },
       req.body,
       {
         new: true,
-      }
+      },
     );
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
@@ -101,7 +141,7 @@ export const softDeleteCourse = async (req, res) => {
     const course = await Course.findOneAndUpdate(
       { slug: req.params.slug },
       { visible: false },
-      { new: true }
+      { new: true },
     );
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
@@ -177,12 +217,13 @@ export const getCourses = async (req, res) => {
 
     // Build the filter object
     const filters = { visible: true };
+    const andConditions = [];
 
     if (subjects) {
-      filters.subject = { $in: subjects.split(",") };
+      andConditions.push({ subject: { $in: subjects.split(",") } });
     }
     if (levels) {
-      filters.level = { $in: levels.split(",") };
+      andConditions.push({ level: { $in: levels.split(",") } });
     }
     if (durations) {
       const durationQueries = durations.split(",").map((duration) => {
@@ -193,7 +234,9 @@ export const getCourses = async (req, res) => {
           return { totalDuration: { $gte: parseInt(min), $lt: parseInt(max) } };
         }
       });
-      filters.$or = durationQueries;
+      if (durationQueries.length > 0) {
+        andConditions.push({ $or: durationQueries });
+      }
     }
     if (prices) {
       const priceQueries = [];
@@ -204,8 +247,12 @@ export const getCourses = async (req, res) => {
         priceQueries.push({ price: { $gt: 0 } });
       }
       if (priceQueries.length > 0) {
-        filters.$or = priceQueries;
+        andConditions.push({ $or: priceQueries });
       }
+    }
+
+    if (andConditions.length > 0) {
+      filters.$and = andConditions;
     }
 
     const courses = await Course.find(filters).populate("teacher");
@@ -245,7 +292,7 @@ export const getSectionsByCourseSlug = async (req, res) => {
     const { slug } = req.params;
 
     const course = await Course.findOne({ slug }).populate(
-      "sections.items.itemId"
+      "sections.items.itemId",
     );
 
     if (!course) {
@@ -296,7 +343,7 @@ export const deleteSection = async (req, res) => {
 
     // Tìm section bằng _id
     const sectionIndex = course.sections.findIndex(
-      (section) => section._id.toString() === sectionId
+      (section) => section._id.toString() === sectionId,
     );
 
     if (sectionIndex === -1) {
@@ -532,28 +579,28 @@ export const updateItem = async (req, res) => {
           updatedItem = await TextLessonModel.findByIdAndUpdate(
             itemId,
             updatedItemData,
-            { new: true }
+            { new: true },
           );
           break;
         case "VideoLesson":
           updatedItem = await VideoLessonModel.findByIdAndUpdate(
             itemId,
             updatedItemData,
-            { new: true }
+            { new: true },
           );
           break;
         case "AudioLesson":
           updatedItem = await AudioLessonModel.findByIdAndUpdate(
             itemId,
             updatedItemData,
-            { new: true }
+            { new: true },
           );
           break;
         case "LiveLesson":
           updatedItem = await LiveLessonModel.findByIdAndUpdate(
             itemId,
             updatedItemData,
-            { new: true }
+            { new: true },
           );
           break;
         default:
@@ -565,7 +612,7 @@ export const updateItem = async (req, res) => {
         updatedItemData,
         {
           new: true,
-        }
+        },
       );
     } else {
       return res.status(400).json({ message: "Invalid item type" });
@@ -595,7 +642,7 @@ export const deleteItem = async (req, res) => {
 
     // Tìm và xóa item từ section
     const itemIndex = section.items.findIndex((item) =>
-      item.itemId.equals(itemId)
+      item.itemId.equals(itemId),
     );
     if (itemIndex === -1)
       return res.status(404).json({ message: "Item not found in section" });
@@ -656,7 +703,7 @@ export const enrollCourse = async (req, res) => {
 
     // Check if already enrolled
     const existingEnrollment = user.enrolledCourses.find(
-      (enrollment) => enrollment.courseId.toString() === course._id.toString()
+      (enrollment) => enrollment.courseId.toString() === course._id.toString(),
     );
     if (existingEnrollment) {
       return res
@@ -692,7 +739,7 @@ export const updateCourseProgress = async (req, res) => {
     }
 
     const enrollment = user.enrolledCourses.find(
-      (enrollment) => enrollment.courseId.toString() === course._id.toString()
+      (enrollment) => enrollment.courseId.toString() === course._id.toString(),
     );
     if (!enrollment) {
       return res.status(400).json({ message: "Not enrolled in this course" });
@@ -706,10 +753,10 @@ export const updateCourseProgress = async (req, res) => {
     // Calculate progress
     const totalItems = course.sections.reduce(
       (total, section) => total + section.items.length,
-      0
+      0,
     );
     enrollment.progress = Math.round(
-      (enrollment.completedItems.length / totalItems) * 100
+      (enrollment.completedItems.length / totalItems) * 100,
     );
     enrollment.lastAccessed = new Date();
 
@@ -744,7 +791,7 @@ export const submitQuiz = async (req, res) => {
     const resultDetails = assignment.questions.map((question) => {
       // Tìm câu trả lời của người dùng trong mảng answers
       const userAnswerObject = answers.find(
-        (answer) => answer.questionId === question._id.toString()
+        (answer) => answer.questionId === question._id.toString(),
       );
 
       // Lấy các đáp án học sinh đã chọn từ userAnswerObject, nếu không tìm thấy thì trả về mảng rỗng
@@ -784,7 +831,7 @@ export const submitQuiz = async (req, res) => {
           isCorrect: detail.isCorrect,
         },
       }));
-      submittedAt: new Date(), (assignmentResult.score = score);
+      submittedAt: (new Date(), (assignmentResult.score = score));
       console.log("-----------old assignmentResult:", assignmentResult);
       await assignmentResult.save();
     } else {
@@ -902,7 +949,7 @@ export const getStudentAssignmentResults = async (req, res) => {
       (question) => {
         // Lấy câu trả lời của người dùng từ assignmentResult.answers
         const userAnswerObject = assignmentResult.answers.find(
-          (a) => a.questionId.toString() === question._id.toString()
+          (a) => a.questionId.toString() === question._id.toString(),
         );
 
         // Lấy danh sách câu trả lời của người dùng, nếu không có thì trả về mảng rỗng
@@ -924,7 +971,7 @@ export const getStudentAssignmentResults = async (req, res) => {
             : false,
           explanation: question.explanation, // Hiển thị explanation được lưu trong question
         };
-      }
+      },
     );
 
     res.json({
@@ -968,7 +1015,7 @@ export const getEnrolledCourses = async (req, res) => {
       }
     });
     const validEnrolledCourses = enrolledCourses.filter(
-      (course) => course !== null
+      (course) => course !== null,
     );
 
     res.json(validEnrolledCourses);
@@ -1074,7 +1121,7 @@ export const removeCourseFromFavorites = async (req, res) => {
 
     // Xóa khóa học khỏi danh sách yêu thích
     user.favoriteCourses = user.favoriteCourses.filter(
-      (id) => id.toString() !== courseId
+      (id) => id.toString() !== courseId,
     );
     await user.save();
 
@@ -1103,7 +1150,7 @@ export const getEnrolledStudents = async (req, res) => {
         username: 1,
         email: 1,
         thumbnail: 1,
-      }
+      },
     ).lean(); // Trả về plain JavaScript object
 
     // Chuyển đổi dữ liệu để lấy progress từ enrollment và kiểm tra sự tồn tại của enrolledCourses

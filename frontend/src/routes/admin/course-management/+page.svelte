@@ -17,7 +17,7 @@
   let searchQuery = "";
   // Hàm lọc danh sách khóa học dựa trên searchQuery
   $: filteredCourses = courses.filter((course) =>
-    course.name.toLowerCase().includes(searchQuery.toLowerCase())
+    course.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
   // Calculate startIndex based on currentPage and pageSize
   $: startIndex = (currentPage - 1) * pageSize;
@@ -40,6 +40,7 @@
     level: "",
     slug: "",
     image_url: "",
+    totalDuration: "",
     price: 0,
     is_published: false,
   };
@@ -86,13 +87,25 @@
         !newCourse.summary ||
         !newCourse.subject ||
         !newCourse.level ||
-        !newCourse.slug
+        !newCourse.slug ||
+        !newCourse.totalDuration
       ) {
         alert("Vui lòng điền đầy đủ thông tin khóa học.");
         return;
       }
 
-      const createdCourse = await createCourse(newCourse);
+      const parsedDuration = Number(newCourse.totalDuration);
+      if (!Number.isFinite(parsedDuration) || parsedDuration <= 0) {
+        alert("Tổng thời lượng phải là số giờ lớn hơn 0.");
+        return;
+      }
+
+      const payload = {
+        ...newCourse,
+        totalDuration: parsedDuration,
+      };
+
+      const createdCourse = await createCourse(payload);
       courses = [...courses, createdCourse]; // Thêm khóa học mới vào danh sách
       showCreateModal = false;
       goto(`/admin/course-management`); // Chuyển hướng đến trang quản lý khóa học
@@ -224,6 +237,17 @@
       <FormGroup>
         <Label for="price">Giá:</Label>
         <Input type="number" id="price" bind:value={newCourse.price} />
+      </FormGroup>
+      <FormGroup>
+        <Label for="totalDuration">Tổng thời lượng (giờ):</Label>
+        <Input
+          type="number"
+          id="totalDuration"
+          min="0.1"
+          step="0.1"
+          bind:value={newCourse.totalDuration}
+          required
+        />
       </FormGroup>
       <FormGroup>
         <Label for="is_published">Trạng thái:</Label>

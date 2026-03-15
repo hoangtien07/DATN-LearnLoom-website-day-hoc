@@ -4,7 +4,9 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "nodemon server.js"
+    "start": "nodemon server.js",
+    "backfill:duration": "node scripts/backfillCourseDuration.js",
+    "backfill:duration:apply": "node scripts/backfillCourseDuration.js --apply"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

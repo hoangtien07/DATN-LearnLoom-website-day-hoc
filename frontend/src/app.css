@@ -11,6 +11,21 @@
 	--color-text: rgba(0, 0, 0, 0.7);
 	--column-width: 42rem;
 	--column-margin-top: 4rem;
+	--learn-primary: #0056d2;
+	--learn-primary-hover: #0046ad;
+	--learn-bg: #f5f7fb;
+	--learn-surface: #ffffff;
+	--learn-surface-soft: #f8faff;
+	--learn-border: #dbe3f0;
+	--learn-text: #1f2937;
+	--learn-text-muted: #5f6f86;
+	--learn-success: #1a7f37;
+	--learn-danger: #b42318;
+	--learn-shadow-sm: 0 2px 8px rgba(15, 40, 90, 0.06);
+	--learn-shadow-md: 0 10px 30px rgba(15, 40, 90, 0.1);
+	--learn-radius-sm: 10px;
+	--learn-radius-md: 14px;
+	--learn-radius-lg: 18px;
 	font-family: var(--font-body);
 	color: var(--color-text);
 }

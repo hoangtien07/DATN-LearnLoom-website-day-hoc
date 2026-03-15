@@ -32,6 +32,9 @@
   const viewResult = () => {
     goto(`/course/${slug}/learn/assignment/${assignmentId}/result`);
   };
+
+  $: isCompleted = ["completed", "can_retake"].includes(status?.status);
+  $: canRetake = status?.status === "can_retake" || assignment?.allowRetake;
 </script>
 
 {#if isLoading}
@@ -40,19 +43,25 @@
   </div>
 {:else}
   <div class="assignment-container">
-    <h2 class="assignment-title">{assignment.name}</h2>
-    <p class="assignment-description">{assignment.description}</p>
+    <div class="assignment-header">
+      <p class="assignment-label">Bài tập trong bài học</p>
+      <h2 class="assignment-title">{assignment.name}</h2>
+      <p class="assignment-description">{assignment.description}</p>
+    </div>
 
     <div class="assignment-actions">
-      {#if status.status === "completed"}
+      {#if isCompleted}
         <p class="assignment-result">
-          Bạn đã hoàn thành bài tập với số điểm {status.score}/{status.totalScore}
+          Bạn đã hoàn thành bài tập {#if status?.score !== undefined}
+            với số điểm {status.score}{#if status?.totalScore !== undefined}/{status.totalScore}{/if}
+          {/if}
         </p>
         <button class="btn btn-primary" on:click={viewResult}
           >Xem kết quả</button
         >
-        {#if status.status === "can_retake"}
-          <button class="btn btn-secondary" on:click={startQuiz}>Làm lại</button
+        {#if canRetake}
+          <button class="btn btn-outline-primary" on:click={startQuiz}
+            >Làm lại</button
           >
         {/if}
       {:else}
@@ -68,35 +77,60 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 200px; /* Điều chỉnh chiều cao tối thiểu nếu cần */
+    min-height: 200px;
+    color: var(--learn-text-muted);
   }
 
   .assignment-container {
-    border: 1px solid #ddd;
-    padding: 20px;
-    border-radius: 5px;
+    border: 1px solid var(--learn-border);
+    border-radius: var(--learn-radius-md);
+    background: var(--learn-surface-soft);
+    padding: 1.15rem;
+  }
+
+  .assignment-header {
+    border-bottom: 1px solid var(--learn-border);
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .assignment-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--learn-text-muted);
+    margin-bottom: 0.35rem;
   }
 
   .assignment-title {
-    margin-bottom: 10px;
+    margin: 0 0 0.55rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--learn-text);
   }
 
   .assignment-description {
-    margin-bottom: 20px;
+    color: var(--learn-text-muted);
+    line-height: 1.55;
+    margin: 0;
   }
 
   .assignment-actions {
     display: flex;
-    flex-direction: column; /* Xếp các nút theo chiều dọc */
-    align-items: flex-start; /* Canh lề các nút về bên trái */
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
   }
 
   .assignment-actions button {
-    margin-bottom: 10px; /* Khoảng cách giữa các nút */
+    min-width: 150px;
+    border-radius: 999px;
+    font-weight: 600;
   }
 
   .assignment-result {
-    margin-bottom: 10px;
+    margin-bottom: 0;
     font-weight: bold;
+    color: var(--learn-text);
   }
 </style>

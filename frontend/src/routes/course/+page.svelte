@@ -14,12 +14,9 @@
   import CourseAll from "../CourseAll.svelte";
   import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
+  import { page } from "$app/stores";
 
-  let sort = ""; // Biến lưu trữ tiêu chí sắp xếp
-
-  const handleSortChange = (event) => {
-    sort = event.target.value;
-  };
+  let sort = "";
 
   // Các giá trị bộ lọc
   let subjects = [];
@@ -42,28 +39,19 @@
 
   // Khai báo khác
   let courses = [];
-  let filterCriteria = {};
+  let filterCriteria = {
+    subjects: [],
+    levels: [],
+    durations: [],
+    prices: [],
+  };
   let isLoading = true;
 
-  let searchTerm = ""; // Biến lưu trữ từ khóa tìm kiếm
-  let filteredCourses = []; // Biến lưu trữ danh sách khóa học sau khi lọc
+  let searchTerm = "";
+  let filteredCourses = [];
+  let lastHandledQuery = "";
 
-  // Hàm tìm kiếm khóa học
-  const handleSearch = () => {
-    // Lọc danh sách khóa học dựa trên searchTerm
-    filteredCourses = courses.filter((course) =>
-      course.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  };
-
-  // Cập nhật danh sách khóa học sau khi tìm kiếm
-  $: if (searchTerm) {
-    handleSearch();
-  } else {
-    filteredCourses = courses; // Hiển thị tất cả khóa học nếu không có từ khóa tìm kiếm
-  }
-
-  const durationMap = {
+  const durationLabelToParam = {
     "Ít hơn 5 giờ": "0-5 giờ",
     "5-10 giờ": "5-10 giờ",
     "10-20 giờ": "10-20 giờ",
@@ -71,32 +59,106 @@
     "Hơn 40 giờ": "Hơn 40 giờ",
   };
 
+  const durationParamToLabel = Object.fromEntries(
+    Object.entries(durationLabelToParam).map(([label, param]) => [
+      param,
+      label,
+    ]),
+  );
+
   // Tạo ID duy nhất từ tên giá trị
   function generateId(value) {
     return value.replace(/\s+/g, "-").toLowerCase();
   }
 
-  function updateUrlWithFilters() {
-    if (browser) {
-      const query = new URLSearchParams();
+  const parseCsvParam = (params, key) => {
+    const raw = params.get(key);
+    return raw
+      ? raw
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean)
+      : [];
+  };
 
-      if (filterCriteria.subjects.length)
-        query.append("subjects", filterCriteria.subjects.join(","));
-      if (filterCriteria.levels.length)
-        query.append("levels", filterCriteria.levels.join(","));
-      if (filterCriteria.durations.length) {
-        const mappedDurations = filterCriteria.durations.map((d) =>
-          d === "Hơn 40 giờ" ? d : durationMap[d] || d
-        );
-        query.append("durations", mappedDurations.join(","));
-      }
-      if (filterCriteria.prices.length)
-        query.append("prices", filterCriteria.prices.join(","));
+  const parseFiltersFromUrl = () => {
+    if (!browser) return;
 
-      // Sử dụng goto để cập nhật URL mà không làm reload trang
-      goto(`/course?${query.toString()}`);
+    const params = new URLSearchParams($page.url.search);
+    selectedSubjects = parseCsvParam(params, "subjects");
+    selectedLevels = parseCsvParam(params, "levels");
+    selectedDurations = parseCsvParam(params, "durations").map(
+      (value) => durationParamToLabel[value] || value,
+    );
+    selectedPrices = parseCsvParam(params, "prices");
+    searchTerm = params.get("search") || "";
+    sort = params.get("sort") || "";
+
+    filterCriteria = {
+      subjects: selectedSubjects,
+      levels: selectedLevels,
+      durations: selectedDurations,
+      prices: selectedPrices,
+    };
+  };
+
+  const buildQueryFromCurrentState = () => {
+    const query = new URLSearchParams();
+
+    if (selectedSubjects.length)
+      query.set("subjects", selectedSubjects.join(","));
+    if (selectedLevels.length) query.set("levels", selectedLevels.join(","));
+    if (selectedDurations.length) {
+      const mappedDurations = selectedDurations.map(
+        (value) => durationLabelToParam[value] || value,
+      );
+      query.set("durations", mappedDurations.join(","));
     }
-  }
+    if (selectedPrices.length) query.set("prices", selectedPrices.join(","));
+    if (searchTerm.trim()) query.set("search", searchTerm.trim());
+    if (sort) query.set("sort", sort);
+
+    return query;
+  };
+
+  const navigateWithCurrentState = () => {
+    if (!browser) return;
+
+    const targetQuery = buildQueryFromCurrentState().toString();
+    const currentQuery = $page.url.searchParams.toString();
+
+    if (targetQuery === currentQuery) return;
+
+    goto(targetQuery ? `/course?${targetQuery}` : "/course", {
+      replaceState: true,
+      noScroll: true,
+    });
+  };
+
+  const fetchCoursesByCriteria = async () => {
+    try {
+      isLoading = true;
+      courses = await fetchFilteredCourses(filterCriteria);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      courses = [];
+    } finally {
+      isLoading = false;
+    }
+  };
+
+  const applyFilters = () => {
+    navigateWithCurrentState();
+  };
+
+  const handleSortChange = (event) => {
+    sort = event.target.value;
+    applyFilters();
+  };
+
+  const handleSearchInput = () => {
+    applyFilters();
+  };
 
   // Cập nhật danh sách khóa học khi bộ lọc thay đổi
   $: filterCriteria = {
@@ -116,69 +178,44 @@
     };
   }
 
-  // Cập nhật url và fetch dữ liệu khi filterCriteria thay đổi
-  $: if (Object.keys(filterCriteria).length > 0) {
-    updateUrlWithFilters();
-    fetchFilteredCourses(filterCriteria).then((data) => {
-      courses = data;
-    });
+  $: if (browser && $page.url.pathname === "/course") {
+    const currentQuery = $page.url.searchParams.toString();
+    if (currentQuery !== lastHandledQuery) {
+      lastHandledQuery = currentQuery;
+      parseFiltersFromUrl();
+      fetchCoursesByCriteria();
+    }
+  }
+
+  $: filteredCourses = searchTerm
+    ? courses.filter((course) =>
+        course.name.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    : courses;
+
+  $: if (sort === "popular") {
+    filteredCourses = [...filteredCourses].sort(
+      (a, b) => (b.totalStudentsEnrolled || 0) - (a.totalStudentsEnrolled || 0),
+    );
+  } else if (sort === "newest") {
+    filteredCourses = [...filteredCourses].sort(
+      (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0),
+    );
+  } else if (sort === "rating") {
+    filteredCourses = [...filteredCourses].sort(
+      (a, b) => (b.avgRating || 0) - (a.avgRating || 0),
+    );
   }
 
   onMount(async () => {
     subjects = await getSubjects();
     subjects = subjects.map((subject) => subject.name);
-    // Lấy các tham số từ URL
     if (browser) {
-      const params = new URLSearchParams(window.location.search);
-      selectedSubjects = params.get("subjects")
-        ? params.get("subjects").split(",")
-        : [];
-      selectedLevels = params.get("levels")
-        ? params.get("levels").split(",")
-        : [];
-      selectedDurations = params.get("durations")
-        ? params.get("durations").split(",")
-        : [];
-      selectedPrices = params.get("prices")
-        ? params.get("prices").split(",")
-        : [];
-
-      // Cập nhật filterCriteria ban đầu
-      filterCriteria = {
-        subjects: selectedSubjects,
-        levels: selectedLevels,
-        durations: selectedDurations,
-        prices: selectedPrices,
-      };
+      parseFiltersFromUrl();
+      lastHandledQuery = $page.url.searchParams.toString();
     }
 
-    // Gọi fetchFilteredCourses một lần duy nhất trong onMount
-    try {
-      courses = await fetchFilteredCourses(filterCriteria);
-      filteredCourses = courses;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    } finally {
-      isLoading = false;
-    }
-    // Lắng nghe sự kiện popstate
-    window.addEventListener("popstate", (event) => {
-      // Lấy các tham số từ URL mới
-      const params = new URLSearchParams(window.location.search);
-      selectedSubjects = params.get("subjects")
-        ? params.get("subjects").split(",")
-        : [];
-      // ... (Cập nhật các biến filter khác) ...
-
-      // Cập nhật filterCriteria và fetch dữ liệu
-      filterCriteria = {
-        subjects: selectedSubjects,
-        // ... (Các biến filter khác) ...
-      };
-      fetchFilteredCourses(filterCriteria).then((data) => {
-        courses = data;
-      });
-    });
+    await fetchCoursesByCriteria();
   });
 
   // Thêm faqs
@@ -227,7 +264,7 @@
         class="search"
         type="text"
         bind:value={searchTerm}
-        on:input={handleSearch}
+        on:input={handleSearchInput}
         placeholder="Nhập tên khóa học..."
       />
     </div>
@@ -242,6 +279,7 @@
           <input
             type="checkbox"
             bind:group={selectedSubjects}
+            on:change={applyFilters}
             value={subject}
             id={generateId(subject)}
           />
@@ -258,6 +296,7 @@
           <input
             type="checkbox"
             bind:group={selectedLevels}
+            on:change={applyFilters}
             value={level}
             id={generateId(level)}
           />
@@ -274,6 +313,7 @@
           <input
             type="checkbox"
             bind:group={selectedDurations}
+            on:change={applyFilters}
             value={duration}
             id={generateId(duration)}
           />
@@ -290,6 +330,7 @@
           <input
             type="checkbox"
             bind:group={selectedPrices}
+            on:change={applyFilters}
             value={price}
             id={generateId(price)}
           />

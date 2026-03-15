@@ -1,5 +1,6 @@
 <script>
   import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
   import { onMount } from "svelte";
   import { getAuthUrl } from "$lib/js/api";
   import logo from "$lib/images/logo.png";
@@ -16,6 +17,32 @@
 
   let showLoginModal = false;
   let subjects = []; // Biến lưu trữ danh sách môn học
+  let searchKeyword = "";
+  let lastCourseSearchQuery = "";
+
+  const navigateToCourse = (params = {}) => {
+    const query = new URLSearchParams();
+
+    Object.entries(params).forEach(([key, value]) => {
+      if (value && String(value).trim()) {
+        query.set(key, String(value).trim());
+      }
+    });
+
+    const queryString = query.toString();
+    goto(queryString ? `/course?${queryString}` : "/course");
+  };
+
+  const handleHeaderSearch = () => {
+    navigateToCourse({ search: searchKeyword });
+  };
+
+  const handleSearchEnter = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleHeaderSearch();
+    }
+  };
 
   const toggleLoginModal = () => {
     showLoginModal = !showLoginModal;
@@ -37,6 +64,13 @@
   $: isInstructorPage =
     $page.url.pathname.includes("/instructor") ||
     $page.url.pathname.includes("/edit-course");
+  $: if ($page.url.pathname === "/course") {
+    const currentQuery = $page.url.searchParams.toString();
+    if (currentQuery !== lastCourseSearchQuery) {
+      lastCourseSearchQuery = currentQuery;
+      searchKeyword = $page.url.searchParams.get("search") || "";
+    }
+  }
 </script>
 
 <header>
@@ -134,22 +168,36 @@
             <Dropdown>
               <DropdownToggle color="primary" caret>Khám phá</DropdownToggle>
               <DropdownMenu>
-                <DropdownItem color="primary"
-                  ><a href="/course">Tất cả khóa học</a></DropdownItem
+                <DropdownItem
+                  color="primary"
+                  on:click={() => navigateToCourse()}
                 >
+                  Tất cả khóa học
+                </DropdownItem>
                 {#each subjects as subject}
                   <DropdownItem
-                    ><a href="/course?subjects={subject.name}">{subject.name}</a
-                    ></DropdownItem
+                    on:click={() =>
+                      navigateToCourse({
+                        subjects: subject.name,
+                      })}
                   >
+                    {subject.name}
+                  </DropdownItem>
                 {/each}
               </DropdownMenu>
             </Dropdown>
           </li>
           <li>
             <div class="search-bar">
-              <input type="text" placeholder="Tìm kiếm khóa học..." />
-              <button><i class="bi bi-search"></i></button>
+              <input
+                type="text"
+                bind:value={searchKeyword}
+                on:keydown={handleSearchEnter}
+                placeholder="Tìm kiếm khóa học..."
+              />
+              <button on:click={handleHeaderSearch}
+                ><i class="bi bi-search"></i></button
+              >
             </div>
           </li>
         </ul>
@@ -206,6 +254,8 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     z-index: 100;
     height: 72px;
+    position: sticky;
+    top: 0;
     display: flex;
     align-items: center;
   }
@@ -283,11 +333,6 @@
 
   .main-menu > li {
     position: relative;
-  }
-
-  .main-menu a {
-    color: #333;
-    text-decoration: none;
   }
 
   .search-bar {

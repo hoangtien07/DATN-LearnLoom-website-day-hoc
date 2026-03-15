@@ -22,7 +22,7 @@
         Object.entries(answers).map(([questionId, selectedOptions]) => [
           questionId,
           Array.isArray(selectedOptions) ? selectedOptions : [selectedOptions],
-        ])
+        ]),
       );
       await submitQuiz(assignmentId, $user._id, formattedAnswers);
       goto(`/course/${slug}/learn/assignment/${assignmentId}/result`);
@@ -74,34 +74,41 @@
       answers[questionId].push(optionText);
     } else {
       answers[questionId] = answers[questionId].filter(
-        (answer) => answer !== optionText
+        (answer) => answer !== optionText,
       );
     }
   };
 </script>
 
 {#if assignment && $user}
-  <div>
-    <h2>{assignment.name}</h2>
-    <p>{assignment.description}</p>
+  <div class="quiz-shell">
+    <div class="quiz-header">
+      <p class="quiz-label">Bài kiểm tra</p>
+      <h2>{assignment.name}</h2>
+      <p>{assignment.description}</p>
+    </div>
 
     {#if hasTimer}
-      <p class="timer">
-        Thời gian còn lại:
-        {Math.floor(timer / 3600)
-          .toString()
-          .padStart(2, "0")}:{Math.floor((timer % 3600) / 60)
-          .toString()
-          .padStart(2, "0")}:{(timer % 60).toString().padStart(2, "0")}
-      </p>
+      <div class="timer-wrap">
+        <p class="timer-title">Thời gian còn lại</p>
+        <p class="timer">
+          {Math.floor(timer / 3600)
+            .toString()
+            .padStart(2, "0")}:{Math.floor((timer % 3600) / 60)
+            .toString()
+            .padStart(2, "0")}:{(timer % 60).toString().padStart(2, "0")}
+        </p>
+      </div>
     {/if}
 
-    <form on:submit|preventDefault={submitAssignment}>
+    <form class="quiz-form" on:submit|preventDefault={submitAssignment}>
       {#each assignment.questions as question, qIndex}
-        <div>
-          <p>Câu {qIndex + 1}: {question.questionText}</p>
+        <section class="question-card">
+          <p class="question-title">
+            Câu {qIndex + 1}: {question.questionText}
+          </p>
           {#each question.options as option, oIndex}
-            <label>
+            <label class="option-item">
               <input
                 type="checkbox"
                 name={`question-${question._id}`}
@@ -112,53 +119,146 @@
               {option.text}
             </label>
           {/each}
-        </div>
+        </section>
       {/each}
-      <button type="submit" disabled={isSubmitting}>Nộp bài</button>
+      <div class="quiz-actions">
+        <button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Đang nộp..." : "Nộp bài"}
+        </button>
+      </div>
     </form>
   </div>
 {:else}
-  <p>Loading assignment...</p>
+  <p class="loading-text">Đang tải bài tập...</p>
 {/if}
 
 <style>
-  div {
-    font-family: "Arial", sans-serif; /* Chọn font chữ dễ đọc */
-    margin-bottom: 20px;
+  .quiz-shell {
+    max-width: 980px;
+    margin: 0 auto;
+    color: var(--learn-text);
   }
 
-  h2 {
-    text-align: center;
-    margin-bottom: 20px;
-    color: #333; /* Màu chữ tiêu đề */
+  .quiz-header {
+    border: 1px solid var(--learn-border);
+    border-radius: var(--learn-radius-md);
+    padding: 1rem;
+    background: var(--learn-surface);
+    box-shadow: var(--learn-shadow-sm);
+    margin-bottom: 0.9rem;
   }
 
-  p {
-    margin-bottom: 10px;
-    line-height: 1.5; /* Giãn dòng cho dễ đọc */
+  .quiz-label {
+    margin: 0 0 0.35rem;
+    color: var(--learn-text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
-  label {
-    display: block; /* Hiển thị label trên một dòng riêng */
-    margin-bottom: 8px;
+  .quiz-header h2 {
+    margin: 0 0 0.45rem;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #0f2d63;
+  }
+
+  .quiz-header p {
+    margin: 0;
+    color: var(--learn-text-muted);
+    line-height: 1.55;
+  }
+
+  .timer-wrap {
+    margin-bottom: 0.85rem;
+    border: 1px solid #f6d89f;
+    border-radius: 12px;
+    padding: 0.75rem;
+    background: #fff7e6;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .timer-title {
+    color: #8a5a00;
+    font-size: 0.85rem;
+    margin: 0;
+  }
+
+  .timer {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #b54708;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .quiz-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .question-card {
+    border: 1px solid var(--learn-border);
+    border-radius: var(--learn-radius-md);
+    padding: 1rem;
+    background: var(--learn-surface);
+    box-shadow: var(--learn-shadow-sm);
+  }
+
+  .question-title {
+    margin: 0 0 0.75rem;
+    font-weight: 700;
+    color: var(--learn-text);
+  }
+
+  .option-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    margin-bottom: 0.55rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid var(--learn-border);
+    border-radius: 10px;
+    cursor: pointer;
+    background: #fbfcff;
+  }
+
+  .option-item:hover {
+    border-color: #a6c4ff;
+    background: #f2f7ff;
   }
 
   input[type="checkbox"] {
-    margin-right: 5px;
+    margin-top: 0.2rem;
+    accent-color: var(--learn-primary);
+  }
+
+  .quiz-actions {
+    position: sticky;
+    bottom: 10px;
+    padding: 0.75rem;
+    border: 1px solid var(--learn-border);
+    border-radius: var(--learn-radius-md);
+    background: var(--learn-surface);
+    box-shadow: var(--learn-shadow-sm);
+    display: flex;
+    justify-content: flex-end;
   }
 
   button {
-    padding: 10px 20px;
-    background-color: #007bff; /* Màu nền nút */
+    height: 40px;
+    padding: 0 1.1rem;
+    background-color: var(--learn-primary);
     color: white;
-    border: none;
-    border-radius: 5px; /* Bo tròn góc nút */
-    cursor: pointer;
-    transition: background-color 0.3s ease; /* Thêm hiệu ứng chuyển màu mượt mà */
+    border-radius: 999px;
+    font-weight: 700;
   }
 
   button:hover {
-    background-color: #0056b3; /* Màu nền nút khi di chuột qua */
+    background-color: var(--learn-primary-hover);
   }
 
   button[disabled] {
@@ -166,11 +266,21 @@
     cursor: not-allowed;
   }
 
-  /* CSS cho bộ đếm thời gian */
-  .timer {
-    font-size: 20px;
-    font-weight: bold;
-    color: #d9534f; /* Màu chữ đỏ */
-    margin-bottom: 20px;
+  .loading-text {
+    color: var(--learn-text-muted);
+  }
+
+  @media (max-width: 768px) {
+    .question-card {
+      padding: 0.85rem;
+    }
+
+    .quiz-actions {
+      justify-content: stretch;
+    }
+
+    .quiz-actions button {
+      width: 100%;
+    }
   }
 </style>

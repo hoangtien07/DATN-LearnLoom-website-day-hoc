@@ -19,8 +19,9 @@
   let item = null;
   let isLoading = true;
   let userProgress = 0;
-  let showCurriculum = false;
+  let showCurriculum = true;
   let showDiscussion = false;
+  let isMobileView = false;
   let newComment = "";
   let comments = [];
   let completedItems = [];
@@ -34,6 +35,54 @@
     loadItem(itemId);
     loadCurriculum();
   }
+
+  const normalizeItemId = (value) => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return String(value._id || value.id || "");
+    }
+    return String(value);
+  };
+
+  const getItemFallbackName = (sectionItem, index) => {
+    const normalizedType = (sectionItem?.itemType || "lesson").toLowerCase();
+    return normalizedType === "assignment"
+      ? `Bai tap ${index + 1}`
+      : `Bai hoc ${index + 1}`;
+  };
+
+  const getDisplayItemName = (sectionItem, index) => {
+    const rawName =
+      sectionItem?.name ||
+      sectionItem?.itemId?.name ||
+      sectionItem?.itemId?.title;
+
+    if (
+      typeof rawName === "string" &&
+      rawName.trim() &&
+      rawName.trim().toLowerCase() !== "undefined"
+    ) {
+      return rawName.trim();
+    }
+
+    return getItemFallbackName(sectionItem, index);
+  };
+
+  onMount(() => {
+    const syncViewport = () => {
+      isMobileView = window.innerWidth < 1024;
+      if (!isMobileView) {
+        showCurriculum = true;
+      }
+    };
+
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+
+    return () => {
+      window.removeEventListener("resize", syncViewport);
+    };
+  });
 
   onMount(async () => {
     try {
@@ -62,7 +111,7 @@
       // Check enrollment status
       if ($user && $user.enrolledCourses) {
         const enrollment = $user.enrolledCourses.find(
-          (enrollment) => enrollment.courseId === course._id
+          (enrollment) => enrollment.courseId === course._id,
         );
         if (enrollment) {
           userProgress = enrollment.progress;
@@ -70,12 +119,41 @@
         }
       }
 
-      // Fetch item names
+      // Fetch item names with safe fallback so first render never shows undefined
       for (const section of course.sections) {
-        for (const item of section.items) {
-          item.name = await getItemName(item);
-        }
+        const resolvedItems = await Promise.all(
+          section.items.map(async (sectionItem, index) => {
+            const normalizedItemId = normalizeItemId(sectionItem.itemId);
+            const initialName = getDisplayItemName(sectionItem, index);
+
+            if (initialName !== getItemFallbackName(sectionItem, index)) {
+              return {
+                ...sectionItem,
+                itemId: normalizedItemId,
+                name: initialName,
+                itemType: (sectionItem.itemType || "lesson").toLowerCase(),
+              };
+            }
+
+            const fetchedName = await getItemName(
+              sectionItem.itemType,
+              normalizedItemId,
+              initialName,
+            );
+
+            return {
+              ...sectionItem,
+              itemId: normalizedItemId,
+              name: fetchedName,
+              itemType: (sectionItem.itemType || "lesson").toLowerCase(),
+            };
+          }),
+        );
+
+        section.items = resolvedItems;
       }
+
+      course = course;
     } catch (error) {
       console.error("Error fetching data:", error);
     }
@@ -95,13 +173,26 @@
   };
 
   // Hàm lấy tên của bài học hoặc bài tập từ item ID
-  const getItemName = async (item) => {
+  const getItemName = async (rawItemType, rawItemId, fallbackName) => {
     try {
-      const response = await getItem(item.itemType, item.itemId);
-      return response.name;
+      const itemType = (rawItemType || "lesson").toLowerCase();
+      const itemId = normalizeItemId(rawItemId);
+
+      if (!itemType || !itemId) {
+        return fallbackName;
+      }
+
+      const response = await getItem(itemType, itemId);
+      const responseName = response?.name || response?.title;
+
+      if (typeof responseName === "string" && responseName.trim()) {
+        return responseName.trim();
+      }
+
+      return fallbackName;
     } catch (error) {
       console.error("Error fetching item name:", error);
-      return "Unknown Item";
+      return fallbackName;
     }
   };
 
@@ -130,7 +221,7 @@
       await updateComment(editingCommentId, editingCommentContent);
       // Cập nhật bình luận trong mảng comments
       const commentIndex = comments.findIndex(
-        (comment) => comment._id === editingCommentId
+        (comment) => comment._id === editingCommentId,
       );
       if (commentIndex !== -1) {
         comments[commentIndex].content = editingCommentContent;
@@ -160,7 +251,7 @@
   const getCurrentSectionIndex = () => {
     if (!course || !item) return -1;
     return course.sections.findIndex((section) =>
-      section.items.some((item) => item.itemId === itemId)
+      section.items.some((item) => item.itemId === itemId),
     );
   };
 
@@ -170,7 +261,7 @@
     const sectionIndex = getCurrentSectionIndex();
     if (sectionIndex === -1) return -1;
     return course.sections[sectionIndex].items.findIndex(
-      (item) => item.itemId === itemId
+      (item) => item.itemId === itemId,
     );
   };
 
@@ -180,7 +271,7 @@
       await updateCourseProgress(slug, itemId, $user._id); // Sử dụng itemId
       await fetchUser();
       const enrollment = $user.enrolledCourses.find(
-        (enrollment) => enrollment.courseId === course._id
+        (enrollment) => enrollment.courseId === course._id,
       );
       if (enrollment) {
         completedItems = enrollment.completedItems;
@@ -237,7 +328,7 @@
       if (itemIndex > 0) {
         const previousItem = course.sections[sectionIndex].items[itemIndex - 1];
         goto(
-          `/course/${slug}/learn/${previousItem.itemType}/${previousItem.itemId}`
+          `/course/${slug}/learn/${previousItem.itemType}/${previousItem.itemId}`,
         );
       } else if (sectionIndex > 0) {
         // Nếu không có bài học/bài tập trước đó trong chương hiện tại, chuyển sang chương trước đó
@@ -246,7 +337,7 @@
         const previousItem =
           previousSection.items[previousSection.items.length - 1];
         goto(
-          `/course/${slug}/learn/${previousItem.itemType}/${previousItem.itemId}`
+          `/course/${slug}/learn/${previousItem.itemType}/${previousItem.itemId}`,
         );
       } else {
         // Nếu đã là bài học/bài tập đầu tiên của khóa học
@@ -266,216 +357,551 @@
   const checkComplete = (item) => {
     return completedItems.includes(item.itemId);
   };
+
+  const getCommentAvatar = (comment) => {
+    return (
+      comment?.author?.thumbnail ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(
+        comment?.author?.username || "User",
+      )}&background=0056d2&color=fff`
+    );
+  };
 </script>
 
-<header>
-  <button on:click={() => goto("/")}>Trang chủ</button>
-  <button on:click={() => (showCurriculum = !showCurriculum)}> Mục lục </button>
-  <h2>{item ? item.name : "Loading..."}</h2>
-  <button on:click={() => (showDiscussion = !showDiscussion)}>
-    Thảo luận
-  </button>
-</header>
-
-<div class="body">
-  {#if showCurriculum}
-    <div class="curriculum">
-      <h3>Mục lục</h3>
-      <ul>
-        {#each course.sections as section, sectionIndex}
-          <li>
-            <button
-              class="section-title"
-              class:collapsed={section.collapsed}
-              on:click={() => toggleSectionVisibility(sectionIndex)}
-            >
-              {section.name}
-              {#if section.collapsed}
-                <span class="arrow">▶</span>
-              {:else}
-                <span class="arrow">▼</span>
-              {/if}
-            </button>
-            {#if !section.collapsed}
-              <ul>
-                {#each section.items as item, index}
-                  <li class:active={item.itemId === itemId}>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={completedItems.includes(item.itemId)}
-                        disabled
-                      />
-                      {#if (sectionIndex === 0 && index === 0) || (index === 0 && completedItems.includes(course.sections[sectionIndex - 1].items[course.sections[sectionIndex - 1].items.length - 1].itemId)) || (index > 0 && completedItems.includes(section.items[index - 1].itemId))}
-                        <a
-                          href={`/course/${slug}/learn/${item.itemType}/${item.itemId}`}
-                        >
-                          {item.name}
-                          {checkComplete(item)}
-                        </a>
-                      {:else}
-                        <span class="disabled-link">{item.name}</span>
-                      {/if}
-                    </label>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          </li>
-        {/each}
-      </ul>
+<div class="learn-shell">
+  <header class="learn-topbar">
+    <div class="topbar-left">
+      <button class="btn-ghost" on:click={() => goto("/")}>Trang chủ</button>
+      <button
+        class="btn-ghost"
+        on:click={() => (showCurriculum = !showCurriculum)}
+      >
+        Mục lục
+      </button>
+      <div class="topbar-title">
+        <h2>{item?.name || item?.title || "Đang tải nội dung..."}</h2>
+        {#if userProgress}
+          <span>Tiến độ: {Math.round(userProgress)}%</span>
+        {/if}
+      </div>
     </div>
-  {/if}
+    <button
+      class="btn-primary"
+      on:click={() => (showDiscussion = !showDiscussion)}
+    >
+      {showDiscussion ? "Đóng thảo luận" : "Thảo luận"}
+    </button>
+  </header>
 
-  <main>
-    {#if isLoading}
-      <p>Loading item...</p>
-    {:else if item}
-      <div class="item-content">
-        <slot {handleMarkCompleted} {goToNextItem} />
-      </div>
-      <div class="item-navigation">
-        <button on:click={goToPreviousItem}>Bài trước</button>
-        <button
-          on:click={goToNextItem}
-          class:finish={getCurrentSectionIndex() ===
-            course.sections.length - 1 &&
-            getCurrentItemIndex() ===
-              course.sections[course.sections.length - 1].items.length - 1}
-        >
-          {#if getCurrentSectionIndex() === course.sections.length - 1 && getCurrentItemIndex() === course.sections[course.sections.length - 1].items.length - 1}
-            Hoàn thành
-          {:else}
-            Bài tiếp theo
-          {/if}
-        </button>
-      </div>
-    {:else}
-      <p>Item not found.</p>
-    {/if}
-  </main>
-
-  {#if showDiscussion}
-    <div class="discussion">
-      <h3>Thảo luận</h3>
-      {#if comments.length === 0}
-        <p>Bài học này chưa có bình luận.</p>
-      {:else}
+  <div class="learn-grid">
+    <aside class="curriculum" class:open={showCurriculum}>
+      <h3>Mục lục khóa học</h3>
+      {#if course?.sections?.length}
         <ul>
-          {#each comments as comment}
+          {#each course.sections as section, sectionIndex}
             <li>
-              {#if editingCommentId === comment._id}
-                <textarea bind:value={editingCommentContent} />
-                <button on:click={handleSaveComment}>Lưu</button>
-              {:else}
-                <strong>{comment.author.username}</strong>: {comment.content}
-                {#if comment.author._id === $user._id}
+              <button
+                class="section-title"
+                class:collapsed={section.collapsed}
+                on:click={() => toggleSectionVisibility(sectionIndex)}
+              >
+                {section.name}
+                {#if section.collapsed}
+                  <span class="arrow">▶</span>
+                {:else}
+                  <span class="arrow">▼</span>
+                {/if}
+              </button>
+              {#if !section.collapsed}
+                <ul>
+                  {#each section.items as item, index}
+                    <li
+                      class:active={normalizeItemId(item.itemId) ===
+                        normalizeItemId(itemId)}
+                    >
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={completedItems.includes(
+                            normalizeItemId(item.itemId),
+                          )}
+                          disabled
+                        />
+                        {#if (sectionIndex === 0 && index === 0) || (index === 0 && completedItems.includes(normalizeItemId(course.sections[sectionIndex - 1].items[course.sections[sectionIndex - 1].items.length - 1].itemId))) || (index > 0 && completedItems.includes(normalizeItemId(section.items[index - 1].itemId)))}
+                          <a
+                            href={`/course/${slug}/learn/${item.itemType}/${normalizeItemId(item.itemId)}`}
+                          >
+                            {getDisplayItemName(item, index)}
+                          </a>
+                        {:else}
+                          <span class="disabled-link"
+                            >{getDisplayItemName(item, index)}</span
+                          >
+                        {/if}
+                      </label>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="empty-note">Đang tải mục lục...</p>
+      {/if}
+    </aside>
+
+    <main class="learn-main">
+      {#if isLoading}
+        <div class="learn-card"><p>Đang tải nội dung bài học...</p></div>
+      {:else if item}
+        <div class="learn-card item-content">
+          <slot {handleMarkCompleted} {goToNextItem} />
+        </div>
+        <div class="item-navigation">
+          <button class="btn-ghost" on:click={goToPreviousItem}
+            >Bài trước</button
+          >
+          <button
+            class="btn-primary"
+            on:click={goToNextItem}
+            class:finish={getCurrentSectionIndex() ===
+              course.sections.length - 1 &&
+              getCurrentItemIndex() ===
+                course.sections[course.sections.length - 1].items.length - 1}
+          >
+            {#if getCurrentSectionIndex() === course.sections.length - 1 && getCurrentItemIndex() === course.sections[course.sections.length - 1].items.length - 1}
+              Hoàn thành khóa học
+            {:else}
+              Bài tiếp theo
+            {/if}
+          </button>
+        </div>
+      {:else}
+        <div class="learn-card"><p>Không tìm thấy nội dung.</p></div>
+      {/if}
+    </main>
+  </div>
+
+  <aside class="discussion" class:open={showDiscussion}>
+    <div class="discussion-header">
+      <h3>Thảo luận</h3>
+      <button class="btn-ghost" on:click={() => (showDiscussion = false)}>
+        Đóng
+      </button>
+    </div>
+    {#if comments.length === 0}
+      <p class="empty-note">Bài học này chưa có bình luận.</p>
+    {:else}
+      <ul>
+        {#each comments as comment}
+          <li>
+            {#if editingCommentId === comment._id}
+              <textarea bind:value={editingCommentContent} />
+              <button class="btn-primary" on:click={handleSaveComment}
+                >Lưu</button
+              >
+            {:else}
+              <div class="comment-item">
+                <img
+                  src={getCommentAvatar(comment)}
+                  alt="avatar"
+                  class="comment-avatar"
+                />
+                <p>
+                  <strong>{comment.author.username}</strong>: {comment.content}
+                </p>
+              </div>
+              {#if comment.author._id === $user._id}
+                <div class="comment-actions">
                   <button on:click={() => handleEditCommentStart(comment)}>
                     Sửa
                   </button>
                   <button on:click={() => handleDeleteComment(comment._id)}>
                     Xóa
                   </button>
-                {/if}
+                </div>
               {/if}
-            </li>
-          {/each}
-        </ul>
-      {/if}
-      {#if $user}
-        <div class="add-comment">
-          <textarea bind:value={newComment} placeholder="Nhập bình luận..." />
-          <button on:click={handleAddComment}>Đăng</button>
-        </div>
-      {:else}
-        <p>Vui lòng đăng nhập để bình luận.</p>
-      {/if}
-    </div>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    {/if}
+    {#if $user}
+      <div class="add-comment">
+        <textarea bind:value={newComment} placeholder="Nhập bình luận..." />
+        <button class="btn-primary" on:click={handleAddComment}
+          >Đăng bình luận</button
+        >
+      </div>
+    {:else}
+      <p class="empty-note">Vui lòng đăng nhập để bình luận.</p>
+    {/if}
+  </aside>
+
+  {#if isMobileView && (showCurriculum || showDiscussion)}
+    <button
+      class="overlay"
+      aria-label="Đóng panel"
+      on:click={() => {
+        showCurriculum = false;
+        showDiscussion = false;
+      }}
+    ></button>
   {/if}
 </div>
 
 <style scoped>
-  :global(main) {
-    max-width: none;
-    width: 100%;
-    margin: 0;
+  .learn-shell {
+    position: relative;
+    min-height: calc(100vh - 84px);
+    color: var(--learn-text);
+    background: linear-gradient(180deg, #f7f9fd 0%, #f0f4fb 100%);
   }
-  header {
+
+  .learn-topbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem;
-    background-color: #f0f0f0;
+    gap: 1rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--learn-border);
+    border-radius: var(--learn-radius-md);
+    background: var(--learn-surface);
+    box-shadow: var(--learn-shadow-sm);
+    margin-bottom: 1rem;
   }
 
-  .body {
+  .topbar-left {
     display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
   }
 
-  .curriculum,
-  .discussion {
-    width: 350px;
-    background-color: #fff;
-    border-right: 1px solid #ccc;
-    padding: 1rem;
+  .topbar-title {
+    min-width: 0;
+    margin-left: 0.5rem;
+  }
+
+  .topbar-title h2 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--learn-text);
+  }
+
+  .topbar-title span {
+    font-size: 0.85rem;
+    color: var(--learn-text-muted);
+  }
+
+  .learn-grid {
+    display: grid;
+    grid-template-columns: minmax(270px, 320px) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .curriculum {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 115px);
     overflow-y: auto;
+    border: 1px solid var(--learn-border);
+    border-radius: var(--learn-radius-md);
+    padding: 1rem;
+    background: var(--learn-surface);
+    box-shadow: var(--learn-shadow-sm);
   }
 
-  .curriculum ul,
-  .discussion ul {
+  .curriculum h3 {
+    margin: 0 0 0.85rem;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .curriculum ul {
     list-style: none;
     padding: 0;
+    margin: 0;
   }
 
-  .curriculum li,
-  .discussion li {
-    margin-bottom: 0.5rem;
+  .curriculum li {
+    margin-bottom: 0.3rem;
   }
 
   .section-title {
-    cursor: pointer;
-    font-weight: bold;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--learn-radius-sm);
+    color: var(--learn-text);
+    background: var(--learn-surface-soft);
+    font-size: 0.95rem;
+    font-weight: 700;
   }
 
-  .section-title.collapsed .arrow {
-    transform: rotate(90deg);
+  .section-title:hover {
+    background: #edf3ff;
   }
 
   .arrow {
-    display: inline-block;
-    margin-left: 0.5rem;
-    transition: transform 0.2s ease;
+    font-size: 0.85rem;
+    color: var(--learn-text-muted);
   }
 
-  .active {
-    font-weight: bold;
+  .curriculum label {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.45rem 0.7rem;
+    border-radius: var(--learn-radius-sm);
+    transition: background-color 0.2s ease;
   }
 
-  main {
-    flex: 1;
+  .curriculum label:hover {
+    background: #f4f7ff;
+  }
+
+  .curriculum a,
+  .disabled-link {
+    color: var(--learn-text);
+    font-size: 0.92rem;
+    line-height: 1.35;
+  }
+
+  .disabled-link {
+    color: #9ba8bd;
+    cursor: not-allowed;
+  }
+
+  .curriculum .active label {
+    background: #e7f0ff;
+    border: 1px solid #c6d9ff;
+  }
+
+  .learn-main {
+    min-width: 0;
+  }
+
+  .learn-card {
+    border: 1px solid var(--learn-border);
+    border-radius: var(--learn-radius-md);
+    background: var(--learn-surface);
+    box-shadow: var(--learn-shadow-sm);
     padding: 1rem;
   }
 
   .item-content {
-    margin-bottom: 1rem;
+    margin-bottom: 0.85rem;
   }
 
   .item-navigation {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    border: 1px solid var(--learn-border);
+    border-radius: var(--learn-radius-md);
+    background: var(--learn-surface);
+    box-shadow: var(--learn-shadow-sm);
     display: flex;
     justify-content: flex-end;
+    gap: 0.6rem;
+    padding: 0.75rem;
   }
 
+  .btn-ghost,
+  .btn-primary,
+  .comment-actions button {
+    height: 38px;
+    border-radius: 999px;
+    padding: 0 0.95rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+  }
+
+  .btn-ghost,
+  .comment-actions button {
+    color: var(--learn-text);
+    border-color: var(--learn-border);
+    background: var(--learn-surface);
+  }
+
+  .btn-ghost:hover,
+  .comment-actions button:hover {
+    background: #eef3ff;
+  }
+
+  .btn-primary {
+    color: #fff;
+    background: var(--learn-primary);
+  }
+
+  .btn-primary:hover {
+    background: var(--learn-primary-hover);
+  }
+
+  .discussion {
+    position: fixed;
+    top: 72px;
+    right: 0;
+    height: calc(100vh - 72px);
+    width: min(410px, 92vw);
+    background: var(--learn-surface);
+    border-left: 1px solid var(--learn-border);
+    box-shadow: var(--learn-shadow-md);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    opacity: 0;
+    transition:
+      transform 0.25s ease,
+      opacity 0.25s ease;
+    z-index: 20;
+    padding: 1rem;
+    overflow: hidden;
+  }
+
+  .discussion.open {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  .discussion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.6rem;
+  }
+
+  .discussion h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 700;
+  }
+
+  .discussion ul {
+    padding: 0;
+    margin: 0;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .discussion li {
+    border: 1px solid var(--learn-border);
+    border-radius: var(--learn-radius-sm);
+    background: var(--learn-surface-soft);
+    padding: 0.6rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .comment-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+  }
+
+  .comment-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--learn-border);
+    flex-shrink: 0;
+  }
+
+  .discussion li p {
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .comment-actions {
+    margin-top: 0.45rem;
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .discussion textarea,
   .add-comment textarea {
     width: 100%;
-    height: 80px;
+    border: 1px solid var(--learn-border);
+    border-radius: 12px;
+    padding: 0.7rem;
     resize: vertical;
-    margin-bottom: 0.5rem;
+    min-height: 88px;
+    margin-bottom: 0.45rem;
+    color: var(--learn-text);
   }
+
+  .add-comment {
+    margin-top: 0.5rem;
+  }
+
   .finish {
-    background-color: green;
+    background-color: var(--learn-success);
   }
-  .disabled-link {
-    color: #ccc;
-    cursor: not-allowed;
+
+  .empty-note {
+    color: var(--learn-text-muted);
+    font-size: 0.92rem;
+  }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 30, 53, 0.48);
+    z-index: 15;
+  }
+
+  @media (max-width: 1023px) {
+    .learn-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .curriculum {
+      position: fixed;
+      left: 0;
+      top: 72px;
+      height: calc(100vh - 72px);
+      width: min(360px, 90vw);
+      max-height: calc(100vh - 72px);
+      border-radius: 0;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+      z-index: 20;
+    }
+
+    .curriculum.open {
+      transform: translateX(0);
+    }
+  }
+
+  @media (max-width: 720px) {
+    .learn-topbar {
+      flex-wrap: wrap;
+    }
+
+    .topbar-left {
+      width: 100%;
+      flex-wrap: wrap;
+    }
+
+    .topbar-title {
+      width: 100%;
+      margin-left: 0;
+    }
+
+    .item-navigation {
+      justify-content: space-between;
+    }
   }
 </style>
