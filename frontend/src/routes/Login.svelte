@@ -1,13 +1,14 @@
 <script>
   import { onMount } from "svelte";
   import { fetchUser, user } from "../stores/auth";
+  import { getAuthUrl } from "$lib/js/api";
 
   const loginWithGoogle = () => {
-    window.location.href = "http://localhost:5000/auth/google";
+    window.location.href = getAuthUrl("/auth/google");
   };
 
   const logoutWithGoogle = () => {
-    window.location.href = "http://localhost:5000/auth/logout";
+    window.location.href = getAuthUrl("/auth/logout");
   };
 
   onMount(() => {

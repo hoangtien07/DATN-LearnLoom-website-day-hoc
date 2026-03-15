@@ -1,8 +1,9 @@
-import { getSession } from "$lib/js/api";
-import { fetchUser } from "./stores/auth";
-
 export async function handle({ event, resolve }) {
-  await fetchUser();
+  if (
+    event.url.pathname === "/.well-known/appspecific/com.chrome.devtools.json"
+  ) {
+    return new Response(null, { status: 204 });
+  }
 
   const response = await resolve(event);
   return response;

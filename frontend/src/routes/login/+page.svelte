@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import { getAuthUrl } from "$lib/js/api";
   import { fetchUser, user } from "../../stores/auth";
   import loginImg from "$lib/images/login.png";
   import { Button } from "@sveltestrap/sveltestrap";
@@ -22,12 +23,12 @@
     {#if loggedInUser}
       <p class="mb-4">Xin chào, {loggedInUser.username}!</p>
 
-      <Button outline color="primary" href="http://localhost:5000/auth/logout"
+      <Button outline color="primary" href={getAuthUrl("/auth/logout")}
         >Log out</Button
       >
     {:else}
       <h1 class="mb-4">Sign in</h1>
-      <Button outline color="primary" href="http://localhost:5000/auth/google"
+      <Button outline color="primary" href={getAuthUrl("/auth/google")}
         ><i class="bi bi-google me-3"></i> Login with Google</Button
       >
     {/if}

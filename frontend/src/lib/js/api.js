@@ -1,10 +1,90 @@
 // frontend/src/lib/js/api.js
 import axios from "axios";
 
+const FALLBACK_API_URL = "http://localhost:5000";
+
+const normalizeBaseUrl = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  return value.replace(/\/$/, "");
+};
+
+const API_BASE_URL = normalizeBaseUrl(
+  import.meta.env.VITE_API_URL || FALLBACK_API_URL,
+);
+
 // Tạo instance của axios với baseURL
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000",
+  baseURL: API_BASE_URL,
+  withCredentials: true,
 });
+
+export const getApiBaseUrl = () => API_BASE_URL;
+
+export const getAuthUrl = (path = "") => {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE_URL}${normalizedPath}`;
+};
+
+export const getChatHistory = async ({
+  sessionKey,
+  courseId,
+  lessonId,
+  limit,
+}) => {
+  try {
+    const response = await apiClient.get("/api/chat/history", {
+      params: {
+        sessionKey,
+        courseId,
+        lessonId,
+        limit,
+      },
+      withCredentials: true,
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching chat history:", error);
+    throw error;
+  }
+};
+
+export const clearChatHistory = async ({ sessionKey, courseId, lessonId }) => {
+  try {
+    const response = await apiClient.delete("/api/chat/history", {
+      data: {
+        sessionKey,
+        courseId,
+        lessonId,
+      },
+      withCredentials: true,
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error("Error clearing chat history:", error);
+    throw error;
+  }
+};
+
+export const deleteChatMessage = async ({ messageId, sessionKey }) => {
+  try {
+    const response = await apiClient.delete(`/api/chat/messages/${messageId}`, {
+      data: {
+        sessionKey,
+      },
+      withCredentials: true,
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error("Error deleting chat message:", error);
+    throw error;
+  }
+};
 
 // Lấy toàn bộ khóa học
 export const fetchCourses = async () => {
@@ -29,17 +109,32 @@ export const fetchCourseBySlug = async (slug) => {
   }
 };
 
+// Backward-compatible helper for pages still using the older function name.
+// Current backend contract fetches a course by slug.
+export const fetchCourseById = async (courseIdOrParams) => {
+  const slug =
+    typeof courseIdOrParams === "string"
+      ? courseIdOrParams
+      : courseIdOrParams?.slug;
+
+  if (!slug) {
+    throw new Error("fetchCourseById requires a course slug");
+  }
+
+  return fetchCourseBySlug(slug);
+};
+
 // Lấy các khóa học đã tạo của giảng viên bằng instructorId
 export const fetchCourseByInstructor = async (instructorId) => {
   try {
     const response = await apiClient.get(
-      `/api/courses/instructor/${instructorId}`
+      `/api/courses/instructor/${instructorId}`,
     );
     return response.data;
   } catch (error) {
     console.error(
       `Error fetching course by instructor with id ${instructorId}:`,
-      error
+      error,
     );
     throw error;
   }
@@ -119,7 +214,7 @@ export const addSectionToCourse = async (slug, sectionData) => {
   try {
     const response = await apiClient.post(
       `/api/courses/${slug}/sections`,
-      sectionData
+      sectionData,
     );
     return response.data;
   } catch (error) {
@@ -143,7 +238,7 @@ export const updateSection = async (slug, sectionId, sectionData) => {
   try {
     const response = await apiClient.put(
       `/api/courses/${slug}/sections/${sectionId}`,
-      sectionData
+      sectionData,
     );
     return response.data;
   } catch (error) {
@@ -155,7 +250,7 @@ export const updateSection = async (slug, sectionId, sectionData) => {
 export const deleteSection = async (slug, sectionId) => {
   try {
     const response = await apiClient.delete(
-      `/api/courses/${slug}/sections/${sectionId}`
+      `/api/courses/${slug}/sections/${sectionId}`,
     );
     return response.data;
   } catch (error) {
@@ -171,7 +266,7 @@ export const addItemToSection = async (slug, sectionId, itemData) => {
   try {
     const response = await apiClient.post(
       `/api/courses/${slug}/sections/${sectionId}/items`,
-      itemData
+      itemData,
     );
     return response.data;
   } catch (error) {
@@ -184,7 +279,7 @@ export const updateItem = async (itemType, itemId, updatedItemData) => {
   try {
     const response = await apiClient.put(
       `/api/courses/items/${itemType}/${itemId}`,
-      updatedItemData
+      updatedItemData,
     );
     return response.data;
   } catch (error) {
@@ -196,7 +291,7 @@ export const updateItem = async (itemType, itemId, updatedItemData) => {
 export const deleteItem = async (slug, sectionId, itemId) => {
   try {
     const response = await apiClient.delete(
-      `/api/courses/${slug}/sections/${sectionId}/items/${itemId}`
+      `/api/courses/${slug}/sections/${sectionId}/items/${itemId}`,
     );
     return response.data;
   } catch (error) {
@@ -209,7 +304,7 @@ export const deleteItem = async (slug, sectionId, itemId) => {
 export const getItem = async (itemType, itemId) => {
   try {
     const response = await apiClient.get(
-      `/api/courses/items/${itemType}/${itemId}`
+      `/api/courses/items/${itemType}/${itemId}`,
     );
     return response.data;
   } catch (error) {
@@ -227,7 +322,7 @@ export const reorderSections = async (slug, startIndex, endIndex) => {
       {
         startIndex,
         endIndex,
-      }
+      },
     );
     return response.data;
   } catch (error) {
@@ -242,7 +337,7 @@ export const reorderItemsInSection = async (slug, sectionId, newOrder) => {
       `/api/courses/${slug}/sections/${sectionId}/reorder`,
       {
         newOrder,
-      }
+      },
     );
     return response.data;
   } catch (error) {
@@ -271,7 +366,7 @@ export const enrollCourse = async (slug, userId) => {
   try {
     console.log(slug, userId);
     const response = await apiClient.post(
-      `/api/courses/${slug}/${userId}/enroll`
+      `/api/courses/${slug}/${userId}/enroll`,
     );
     return response.data;
   } catch (error) {
@@ -313,7 +408,7 @@ export const addComment = async (
   itemId,
   userId,
   content,
-  courseId
+  courseId,
 ) => {
   console.log(`/api/comments/${itemType}/${itemId}/${userId}`, {
     content,
@@ -325,7 +420,7 @@ export const addComment = async (
       {
         content,
         courseId,
-      }
+      },
     );
     console.log(response.data);
     return response.data; // Trả về bình luận mới tạo
@@ -366,7 +461,7 @@ export const getUserAssignmentStatus = async (userId, assignmentId) => {
   try {
     console.log(`/api/courses/assignments/${assignmentId}/${userId}/status`);
     const response = await apiClient.get(
-      `/api/courses/assignments/${assignmentId}/user/${userId}/status`
+      `/api/courses/assignments/${assignmentId}/user/${userId}/status`,
     );
     return response.data; // Trả về trạng thái của bài tập (ví dụ: "not_started", "completed", "can_retake")
   } catch (error) {
@@ -387,7 +482,7 @@ export const submitQuiz = async (assignmentId, userId, answers) => {
           userAnswer: optionText, // Text của câu trả lời
           isCorrect: false, // Backend sẽ xử lý xem câu trả lời có đúng hay không
         })),
-      })
+      }),
     );
 
     console.log("forrmat: ", formattedAnswers);
@@ -397,7 +492,7 @@ export const submitQuiz = async (assignmentId, userId, answers) => {
       {
         userId,
         answers: formattedAnswers,
-      }
+      },
     );
 
     return response.data;
@@ -411,7 +506,7 @@ export const submitQuiz = async (assignmentId, userId, answers) => {
 export const getQuizResult = async (assignmentId, userId) => {
   try {
     const response = await apiClient.get(
-      `/api/courses/assignments/${assignmentId}/user/${userId}/student-results`
+      `/api/courses/assignments/${assignmentId}/user/${userId}/student-results`,
     );
     return response.data;
   } catch (error) {
@@ -438,7 +533,7 @@ export const addReview = async (courseId, userId, reviewData) => {
   try {
     const response = await apiClient.post(
       `/api/reviews/${courseId}/${userId}`,
-      reviewData
+      reviewData,
     );
     return response.data;
   } catch (error) {
@@ -452,7 +547,7 @@ export const updateReview = async (reviewId, reviewData) => {
   try {
     const response = await apiClient.put(
       `/api/reviews/${reviewId}`,
-      reviewData
+      reviewData,
     );
     return response.data;
   } catch (error) {
@@ -511,12 +606,8 @@ export const deleteUser = async (userId) => {
 export const createOrder = async (req, res) => {
   try {
     const data = {
-      userId: req.userId,
       courseId: req.courseId,
-      teacherId: req.teacherId,
-      price: req.price,
       redirectUrl: req.redirectUrl,
-      courseName: req.courseName,
     };
     console.log(data);
     const response = await apiClient.post(`/api/orders/create`, data);
@@ -527,11 +618,38 @@ export const createOrder = async (req, res) => {
   }
 };
 
+export const createVnpayPaymentUrl = async (orderId) => {
+  try {
+    const response = await apiClient.post(
+      `/api/orders/payment/create-vnpay-url`,
+      {
+        orderId,
+      },
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error creating VNPay payment URL:", error);
+    throw error;
+  }
+};
+
+export const getOrderPaymentStatus = async (orderId) => {
+  try {
+    const response = await apiClient.get(
+      `/api/orders/payment/status/${orderId}`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching order payment status:", error);
+    throw error;
+  }
+};
+
 // Update order
 export const updateOrder = async (userId, courseId, transactionId) => {
   try {
     const response = await apiClient.put(
-      `/api/orders/${userId}/${courseId}/${transactionId}`
+      `/api/orders/${userId}/${courseId}/${transactionId}`,
     );
 
     return response.data; // Trả về order đã được cập nhật từ backend
@@ -577,7 +695,7 @@ export const updateSubject = async (subjectId, subjectData) => {
   try {
     const response = await apiClient.put(
       `/api/subjects/${subjectId}`,
-      subjectData
+      subjectData,
     );
     return response.data;
   } catch (error) {
@@ -623,7 +741,7 @@ export const getFavoriteCourses = async (userId) => {
 export const getRecommendedCourses = async (userId) => {
   try {
     const response = await apiClient.get(
-      `/api/courses/recommendations/${userId}`
+      `/api/courses/recommendations/${userId}`,
     );
     return response.data;
   } catch (error) {
@@ -636,7 +754,7 @@ export const getRecommendedCourses = async (userId) => {
 export const addCourseToFavorites = async (courseId, userId) => {
   try {
     const response = await apiClient.post(
-      `/api/courses/favorite/${courseId}/${userId}`
+      `/api/courses/favorite/${courseId}/${userId}`,
     );
     return response.data;
   } catch (error) {
@@ -649,7 +767,7 @@ export const addCourseToFavorites = async (courseId, userId) => {
 export const removeCourseFromFavorites = async (courseId, userId) => {
   try {
     const response = await apiClient.delete(
-      `/api/courses/favorite/${courseId}/${userId}`
+      `/api/courses/favorite/${courseId}/${userId}`,
     );
     return response.data;
   } catch (error) {
@@ -662,13 +780,13 @@ export const removeCourseFromFavorites = async (courseId, userId) => {
 export const getEnrolledStudents = async (courseId) => {
   try {
     const response = await apiClient.get(
-      `/api/courses/enrolled-students/${courseId}`
+      `/api/courses/enrolled-students/${courseId}`,
     );
     return response.data;
   } catch (error) {
     console.error(
       `Error fetching enrolled students for course ${courseId}:`,
-      error
+      error,
     );
     throw error;
   }

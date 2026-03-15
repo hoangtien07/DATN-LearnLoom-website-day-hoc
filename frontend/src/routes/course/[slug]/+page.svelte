@@ -6,6 +6,7 @@
     enrollCourse,
     getReviews,
     createOrder,
+    createVnpayPaymentUrl,
     addCourseToFavorites,
     removeCourseFromFavorites,
   } from "$lib/js/api";
@@ -54,19 +55,26 @@
     }
     try {
       if (course.price > 0) {
-        console.log(course.teacher._id);
-        const response = await createOrder({
+        const redirectUrl = `${window.location.origin}/course/${slug}`;
+        const orderResponse = await createOrder({
           courseId: course._id,
-          userId: $user._id,
-          teacherId: course.teacher._id,
-          price: course.price,
-          redirectUrl: `http://localhost:5173/course/${slug}`,
-          courseName: course.name,
+          redirectUrl,
         });
-        if (response.success) {
-          window.location = `http://localhost:8888/order/create_payment_url?courseId=${course._id}&userId=${$user._id}&teacherId=${course.teacher._id}&price=${course.price}&redirectUrl=${encodeURIComponent(`http://localhost:5173/course/${slug}`)}&courseName=${encodeURIComponent(course.name)}&slug=${encodeURIComponent(slug)}`;
+
+        if (orderResponse.success && orderResponse.orderId) {
+          const paymentResponse = await createVnpayPaymentUrl(
+            orderResponse.orderId,
+          );
+          if (paymentResponse.success && paymentResponse.paymentUrl) {
+            window.location = paymentResponse.paymentUrl;
+            return;
+          }
+
+          console.error("VNPay URL creation failed:", paymentResponse.message);
+          alert("Không thể khởi tạo thanh toán. Vui lòng thử lại.");
         } else {
-          console.error("Order creation failed:", response.message);
+          console.error("Order creation failed:", orderResponse.message);
+          alert("Không thể tạo đơn thanh toán. Vui lòng thử lại.");
         }
       } else {
         await enrollCourse(slug, $user._id);
@@ -91,7 +99,7 @@
       // Check enrollment status
       if ($user && $user.enrolledCourses) {
         const enrollment = $user.enrolledCourses.find(
-          (enrollment) => enrollment.courseId === course._id
+          (enrollment) => enrollment.courseId === course._id,
         );
         if (enrollment) {
           isEnrolled = true;
@@ -158,7 +166,7 @@
         // Xóa khỏi danh sách yêu thích
         await removeCourseFromFavorites(course._id, $user._id);
         $user.favoriteCourses = $user.favoriteCourses.filter(
-          (id) => id !== course._id
+          (id) => id !== course._id,
         );
       } else {
         // Thêm vào danh sách yêu thích
@@ -190,7 +198,7 @@
           max-width="100%"
           height="auto"
           src="https://www.youtube.com/embed/{getYoutubeVideoId(
-            course.overviewVideo
+            course.overviewVideo,
           )}"
           title="YouTube video player"
           frameborder="0"

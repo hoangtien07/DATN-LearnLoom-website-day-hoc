@@ -1,6 +1,7 @@
 <script>
   import { page } from "$app/stores";
   import { onMount } from "svelte";
+  import { getAuthUrl } from "$lib/js/api";
   import logo from "$lib/images/logo.png";
   import { user, fetchUser } from "../stores/auth";
   import Login from "./Login.svelte";
@@ -23,7 +24,9 @@
   // Lấy danh sách môn học khi component được tạo
   onMount(async () => {
     try {
-      if (!$user) $user = fetchUser();
+      if (!$user) {
+        await fetchUser();
+      }
       subjects = await getSubjects();
     } catch (error) {
       console.error("Lỗi khi lấy danh sách môn học:", error);
@@ -73,7 +76,7 @@
             >
             <DropdownMenu end>
               <DropdownItem>
-                <a href="http://localhost:5000/auth/logout"
+                <a href={getAuthUrl("/auth/logout")}
                   >Đăng xuất <i class="bi bi-box-arrow-right ms-1"></i></a
                 ></DropdownItem
               >
@@ -115,7 +118,7 @@
                 ><a href="/profile">Thông tin cá nhân</a></DropdownItem
               >
               <DropdownItem
-                ><a href="http://localhost:5000/auth/logout" class="d-block"
+                ><a href={getAuthUrl("/auth/logout")} class="d-block"
                   >Đăng xuất <i class="bi bi-box-arrow-right ms-1"></i></a
                 ></DropdownItem
               >
@@ -176,7 +179,7 @@
                   ><a href="/profile">Thông tin cá nhân</a></DropdownItem
                 >
                 <DropdownItem
-                  ><a href="http://localhost:5000/auth/logout" class="d-block"
+                  ><a href={getAuthUrl("/auth/logout")} class="d-block"
                     >Đăng xuất <i class="bi bi-box-arrow-right ms-1"></i></a
                   ></DropdownItem
                 >
@@ -211,7 +214,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    max-width: 1200px;
+    max-width: 1440px;
     margin: 0 auto;
   }
 

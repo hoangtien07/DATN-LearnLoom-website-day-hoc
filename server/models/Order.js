@@ -32,6 +32,13 @@ const orderSchema = new Schema(
     transactionId: {
       type: String,
     },
+    paymentGatewayTxnRef: {
+      type: String,
+      index: true,
+    },
+    gatewayResponseCode: {
+      type: String,
+    },
     amount: {
       type: Number,
       required: true,
@@ -43,11 +50,20 @@ const orderSchema = new Schema(
     paymentStatus: {
       type: String,
       enum: ["success", "fail", "pending"],
-      default: "success",
+      default: "pending",
+    },
+    paidAt: {
+      type: Date,
+    },
+    failedAt: {
+      type: Date,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
+
+orderSchema.index({ userId: 1, courseId: 1, paymentStatus: 1 });
+orderSchema.index({ transactionId: 1 }, { sparse: true, unique: true });
 
 const Order = mongoose.model("Order", orderSchema);
 export default Order;

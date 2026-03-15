@@ -6,16 +6,16 @@
   import { page } from "$app/stores";
 
   let course = {};
-  const _id = $page.params;
+  const slug = $page.params.slug;
 
-  console.log(_id);
+  console.log(slug);
 
   onMount(async () => {
-    course = await fetchCourseById(_id);
+    course = await fetchCourseById(slug);
   });
 
   const handleSave = async (updatedCourse) => {
-    await updateCourse(_id, updatedCourse);
+    await updateCourse(slug, updatedCourse);
     window.location.href = "/course";
   };
 </script>
