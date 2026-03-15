@@ -4,13 +4,13 @@ import User from "../models/User.js";
 
 const router = express.Router();
 
-router.get("/", checkRole("teacher"), (req, res) => {
+router.get("/", checkRole("instructor"), (req, res) => {
   res.send(req.user); // Trả về thông tin người dùng
 });
 
 router.get("/teachers", async (req, res) => {
   try {
-    const teachers = await User.find({ role: "teacher" });
+    const teachers = await User.find({ role: "instructor" });
     res.json(teachers);
   } catch (error) {
     res.status(500).json({ error: error.message });

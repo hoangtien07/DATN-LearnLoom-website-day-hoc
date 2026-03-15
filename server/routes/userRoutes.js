@@ -4,12 +4,12 @@ import {
   updateUser,
   deleteUser,
 } from "../controllers/userController.js";
-// import { checkRole } from "../middleware/isAuthenticated.js";
+import { checkRole } from "../middleware/isAuthenticated.js";
 
 const router = express.Router();
 
 // Chỉ admin mới có thể truy cập các route này
-// router.use(checkRole("admin"));
+router.use(checkRole("admin"));
 
 router.get("/", getUsers);
 router.put("/:userId", updateUser);

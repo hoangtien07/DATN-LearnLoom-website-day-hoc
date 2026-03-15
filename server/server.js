@@ -17,7 +17,7 @@ import userRoutes from "./routes/userRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import subjectRoutes from "./routes/subjectRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
-// import teacherRoutes from "./routes/teacherRoutes.js";
+import teacherRoutes from "./routes/teacherRoutes.js";
 // import adminRoutes from "./routes/adminRoutes.js";
 import { isAuthenticated, checkRole } from "./middleware/isAuthenticated.js";
 
@@ -80,7 +80,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use("/api/chat", chatRoutes);
 // app.use("/api/student", studentRoutes);
-// app.use("/api/teacher", teacherRoutes);
+app.use("/api/teacher", teacherRoutes);
 // app.use("/api/admin", adminRoutes);
 
 // Start the server

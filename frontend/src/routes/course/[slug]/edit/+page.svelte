@@ -4,6 +4,7 @@
   import { fetchCourseById, updateCourse } from "$lib/js/api";
   import CourseForm from "$lib/components/courseForm.svelte";
   import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
 
   let course = {};
   const slug = $page.params.slug;
@@ -16,7 +17,8 @@
 
   const handleSave = async (updatedCourse) => {
     await updateCourse(slug, updatedCourse);
-    window.location.href = "/course";
+    const from = $page.url.searchParams.get("from");
+    goto(from === "admin" ? "/admin/course-management" : "/course");
   };
 </script>
 

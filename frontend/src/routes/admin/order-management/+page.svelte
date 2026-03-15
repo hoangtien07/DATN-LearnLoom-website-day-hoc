@@ -7,6 +7,10 @@
   let orders = [];
   let totalEarnings = 0;
   let earningsThisMonth = 0;
+  $: orderCount = orders.length;
+  $: averageOrderValue = orderCount
+    ? Math.round(totalEarnings / orderCount)
+    : 0;
 
   onMount(async () => {
     if ($user && ($user.role === "instructor" || $user.role === "admin")) {
@@ -32,60 +36,81 @@
 </script>
 
 {#if $user && ($user.role === "instructor" || $user.role === "admin")}
-  <h2>Thống kê Tài chính</h2>
-
-  <div class="financial-summary">
-    <div class="summary-item">
-      <h3>Tổng thu nhập</h3>
-      <p>{totalEarnings.toLocaleString()} VND</p>
+  <section class="admin-shell">
+    <div class="admin-hero">
+      <h1>Quản lý hóa đơn</h1>
+      <p>
+        Theo dõi doanh thu toàn hệ thống, kiểm tra lịch sử đơn hàng và đối soát
+        thanh toán theo thời gian thực.
+      </p>
     </div>
-    <div class="summary-item">
-      <h3>Thu nhập tháng này</h3>
-      <p>{earningsThisMonth.toLocaleString()} VND</p>
+
+    <div class="admin-stats-grid">
+      <article class="admin-stat-card">
+        <p class="admin-stat-label">Tổng đơn hàng</p>
+        <p class="admin-stat-value">{orderCount}</p>
+      </article>
+      <article class="admin-stat-card">
+        <p class="admin-stat-label">Tổng doanh thu</p>
+        <p class="admin-stat-value">{totalEarnings.toLocaleString()} VND</p>
+      </article>
+      <article class="admin-stat-card">
+        <p class="admin-stat-label">Doanh thu tháng này</p>
+        <p class="admin-stat-value">{earningsThisMonth.toLocaleString()} VND</p>
+      </article>
+      <article class="admin-stat-card">
+        <p class="admin-stat-label">Giá trị đơn trung bình</p>
+        <p class="admin-stat-value">{averageOrderValue.toLocaleString()} VND</p>
+      </article>
     </div>
-  </div>
 
-  <h2>Hóa đơn</h2>
-
-  <Table striped bordered hover responsive>
-    <thead>
-      <tr>
-        <th>STT</th>
-        <th>ID</th>
-        <th>Khóa học</th>
-        <th>Học viên</th>
-        <th>Ngày mua</th>
-        <th>Số tiền</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each orders as order, index}
-        <tr>
-          <td>{index + 1}</td>
-          <td>{order._id}</td>
-          <td>{order.courseName}</td>
-          <td>{order.userId}</td>
-          <td>{new Date(order.createdAt).toLocaleDateString()}</td>
-          <td>{order.amount.toLocaleString()} VND</td>
-        </tr>
-      {/each}
-    </tbody>
-  </Table>
+    <div class="admin-card">
+      <h2 class="table-title">Lịch sử hóa đơn</h2>
+      {#if orders.length === 0}
+        <div class="admin-empty-state">Chưa có hóa đơn nào.</div>
+      {:else}
+        <div class="admin-table-wrap">
+          <Table striped bordered hover responsive>
+            <thead>
+              <tr>
+                <th>STT</th>
+                <th>ID</th>
+                <th>Khóa học</th>
+                <th>Học viên</th>
+                <th>Ngày mua</th>
+                <th>Số tiền</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each orders as order, index}
+                <tr>
+                  <td>{index + 1}</td>
+                  <td>{order._id}</td>
+                  <td>{order.courseName}</td>
+                  <td>{order.userId}</td>
+                  <td>{new Date(order.createdAt).toLocaleDateString()}</td>
+                  <td>{order.amount.toLocaleString()} VND</td>
+                </tr>
+              {/each}
+            </tbody>
+          </Table>
+        </div>
+      {/if}
+    </div>
+  </section>
 {:else}
-  <h2>Bạn không có quyền truy cập trang này.</h2>
+  <section class="admin-shell">
+    <div class="admin-card">
+      <h2>Bạn không có quyền truy cập trang này.</h2>
+    </div>
+  </section>
 {/if}
 
 <style>
-  .financial-summary {
-    display: flex;
-    gap: 20px;
-    margin-bottom: 20px;
-  }
-
-  .summary-item {
-    border: 1px solid #ccc;
-    padding: 15px;
-    border-radius: 5px;
-    flex: 1;
+  .table-title {
+    font-size: 1.06rem;
+    font-weight: 700;
+    color: #102247;
+    margin-bottom: 0.9rem;
   }
 </style>

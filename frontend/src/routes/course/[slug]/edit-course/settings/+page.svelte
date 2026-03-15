@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
   import { fetchCourseBySlug, updateCourse, getSubjects } from "$lib/js/api";
   import Editor from "cl-editor";
   import { writable } from "svelte/store";
@@ -35,7 +36,10 @@
     try {
       course.description = $editedContent;
       await updateCourse(slug, course);
-      console.log("Course updated successfully!");
+      const from = $page.url.searchParams.get("from");
+      if (from === "admin") {
+        goto("/admin/course-management");
+      }
     } catch (error) {
       console.error("Error updating course:", error);
     }
@@ -84,7 +88,7 @@
           width="560"
           height="315"
           src="https://www.youtube.com/embed/{getYoutubeVideoId(
-            course.overviewVideo
+            course.overviewVideo,
           )}"
           title="YouTube video player"
           frameborder="0"

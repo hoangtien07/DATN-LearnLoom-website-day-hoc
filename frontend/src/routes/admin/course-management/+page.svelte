@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { fetchCourses, deleteCourse, createCourse } from "$lib/js/api";
+  import { user } from "../../../stores/auth.js";
   import { paginate, LightPaginationNav } from "svelte-paginate";
   import {
     Button,
@@ -44,6 +45,10 @@
     price: 0,
     is_published: false,
   };
+
+  $: publishedCount = courses.filter((course) => course.is_published).length;
+  $: draftCount = courses.length - publishedCount;
+
   // Cập nhật paginatedItems khi filteredCourses thay đổi
   $: paginatedItems = paginate({
     items: filteredCourses,
@@ -79,7 +84,9 @@
     }
   };
 
-  const handleCreateCourse = async () => {
+  const handleCreateCourse = async (event) => {
+    event?.preventDefault();
+
     try {
       // Validate dữ liệu newCourse (bạn cần tự thêm logic validation)
       if (
@@ -103,6 +110,7 @@
       const payload = {
         ...newCourse,
         totalDuration: parsedDuration,
+        teacher: $user?._id,
       };
 
       const createdCourse = await createCourse(payload);
@@ -115,79 +123,118 @@
   };
 </script>
 
-<h1 class="mt-3">Quản lý Khóa học</h1>
-
-<div class="course-actions d-flex justify-content-between my-4">
-  <div style="width:50%">
-    <Input
-      type="text"
-      placeholder="Tìm kiếm khóa học..."
-      bind:value={searchQuery}
-    />
+<section class="admin-shell">
+  <div class="admin-hero">
+    <h1>Quản lý khóa học</h1>
+    <p>
+      Quản trị danh sách khóa học, theo dõi trạng thái xuất bản và cập nhật nội
+      dung đào tạo theo từng chủ đề.
+    </p>
   </div>
-  <Button color="primary" on:click={() => (showCreateModal = true)}
-    >Tạo khóa học mới</Button
-  >
-</div>
 
-{#if isLoading}
-  <p>Đang tải danh sách khóa học...</p>
-{:else if courses.length === 0}
-  <p>Chưa có khóa học nào.</p>
-{:else}
-  <Table striped bordered hover responsive>
-    <thead>
-      <tr>
-        <th>STT</th> <th>ID</th>
-        <th>Tên khóa học</th>
-        <th>Chủ đề</th>
-        <th>Cấp độ</th>
-        <th>Giá</th>
-        <th>Trạng thái</th>
-        <th>Hành động</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each paginatedItems as course, index}
-        <tr>
-          <td>{startIndex + index + 1}</td>
-          <td>{course._id}</td>
-          <td>{course.name}</td>
-          <td>{course.subject}</td>
-          <td>{course.level}</td>
-          <td>{course.price}</td>
-          <td>{course.is_published ? "Đã xuất bản" : "Chưa xuất bản"}</td>
-          <td>
-            <Button
-              color="primary"
-              outline
-              size="sm"
-              href={`/admin/course-management/${course.slug}/edit`}
-            >
-              Chỉnh sửa
-            </Button>
-            <Button
-              color="danger"
-              outline
-              size="sm"
-              on:click={() => handleDeleteCourse(course.slug)}
-            >
-              Xóa
-            </Button>
-          </td>
-        </tr>
-      {/each}
-    </tbody>
-  </Table>
+  <div class="admin-stats-grid">
+    <article class="admin-stat-card">
+      <p class="admin-stat-label">Tổng khóa học</p>
+      <p class="admin-stat-value">{courses.length}</p>
+    </article>
+    <article class="admin-stat-card">
+      <p class="admin-stat-label">Đã xuất bản</p>
+      <p class="admin-stat-value">{publishedCount}</p>
+    </article>
+    <article class="admin-stat-card">
+      <p class="admin-stat-label">Bản nháp</p>
+      <p class="admin-stat-value">{draftCount}</p>
+    </article>
+    <article class="admin-stat-card">
+      <p class="admin-stat-label">Hiển thị mỗi trang</p>
+      <p class="admin-stat-value">{pageSize}</p>
+    </article>
+  </div>
 
-  <LightPaginationNav
-    totalItems={filteredCourses.length}
-    {pageSize}
-    {currentPage}
-    limit={5}
-    on:setPage={(e) => (currentPage = e.detail.page)}
-  />
-{/if}
+  <div class="admin-card">
+    <div class="admin-toolbar">
+      <div class="toolbar-search">
+        <Input
+          type="text"
+          placeholder="Tìm kiếm khóa học..."
+          bind:value={searchQuery}
+        />
+      </div>
+      <Button color="primary" on:click={() => (showCreateModal = true)}
+        >Tạo khóa học mới</Button
+      >
+    </div>
+
+    {#if isLoading}
+      <div class="admin-empty-state">Đang tải danh sách khóa học...</div>
+    {:else if courses.length === 0}
+      <div class="admin-empty-state">Chưa có khóa học nào.</div>
+    {:else if filteredCourses.length === 0}
+      <div class="admin-empty-state">Không tìm thấy khóa học phù hợp.</div>
+    {:else}
+      <div class="admin-table-wrap">
+        <Table striped bordered hover responsive>
+          <thead>
+            <tr>
+              <th>STT</th>
+              <th>ID</th>
+              <th>Tên khóa học</th>
+              <th>Chủ đề</th>
+              <th>Cấp độ</th>
+              <th>Giá</th>
+              <th>Trạng thái</th>
+              <th>Hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each paginatedItems as course, index}
+              <tr>
+                <td>{startIndex + index + 1}</td>
+                <td>{course._id}</td>
+                <td>{course.name}</td>
+                <td>{course.subject}</td>
+                <td>{course.level}</td>
+                <td>{Number(course.price || 0).toLocaleString()} VND</td>
+                <td>{course.is_published ? "Đã xuất bản" : "Chưa xuất bản"}</td>
+                <td>
+                  <div class="admin-page-actions">
+                    <Button
+                      color="primary"
+                      outline
+                      size="sm"
+                      href={`/course/${course.slug}/edit-course/settings?from=admin`}
+                    >
+                      Chỉnh sửa
+                    </Button>
+                    <Button
+                      color="danger"
+                      outline
+                      size="sm"
+                      on:click={() => handleDeleteCourse(course.slug)}
+                      disabled={isDeleting}
+                    >
+                      Xóa
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </Table>
+      </div>
+
+      <div class="mt-3">
+        <LightPaginationNav
+          totalItems={filteredCourses.length}
+          {pageSize}
+          {currentPage}
+          limit={5}
+          on:setPage={(e) => (currentPage = e.detail.page)}
+        />
+      </div>
+    {/if}
+  </div>
+</section>
 
 <!-- Modal tạo khóa học mới -->
 <Modal isOpen={showCreateModal} toggle={() => (showCreateModal = false)}>
@@ -263,4 +310,14 @@
 </Modal>
 
 <style>
+  :global(.admin-toolbar .toolbar-search .form-control) {
+    border: none;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  :global(.admin-toolbar .toolbar-search .form-control:focus) {
+    box-shadow: none;
+  }
 </style>

@@ -64,6 +64,40 @@
   $: isInstructorPage =
     $page.url.pathname.includes("/instructor") ||
     $page.url.pathname.includes("/edit-course");
+
+  const normalizePath = (path = "/") => {
+    const trimmedPath = path.replace(/\/+$/, "");
+    return trimmedPath || "/";
+  };
+
+  $: currentPath = normalizePath($page.url.pathname);
+
+  const resolveAdminActiveTab = (path) => {
+    if (path === "/admin") {
+      return "dashboard";
+    }
+
+    if (path.startsWith("/admin/course-management")) {
+      return "course";
+    }
+
+    if (path.startsWith("/admin/order-management")) {
+      return "order";
+    }
+
+    if (path.startsWith("/admin/user-management")) {
+      return "user";
+    }
+
+    if (path.startsWith("/admin/subject-management")) {
+      return "subject";
+    }
+
+    return "";
+  };
+
+  $: adminActiveTab = resolveAdminActiveTab(currentPath);
+
   $: if ($page.url.pathname === "/course") {
     const currentQuery = $page.url.searchParams.toString();
     if (currentQuery !== lastCourseSearchQuery) {
@@ -82,25 +116,34 @@
     {#if $user && $user.role === "admin"}
       <!-- Header cho admin -->
       <nav class="admin-instructor-nav">
-        <ul>
+        <ul class="admin-links">
           <li>
-            <a class="text-primary" href="/admin/course-management"
-              >Quản lý khóa học</a
+            <a class:active={adminActiveTab === "dashboard"} href="/admin"
+              >Tổng quan</a
             >
           </li>
           <li>
-            <a class="text-primary" href="/admin/order-management"
-              >Quản lý hóa đơn</a
+            <a
+              class:active={adminActiveTab === "course"}
+              href="/admin/course-management">Quản lý khóa học</a
             >
           </li>
           <li>
-            <a class="text-primary" href="/admin/user-management"
-              >Quản lý tài khoản</a
+            <a
+              class:active={adminActiveTab === "order"}
+              href="/admin/order-management">Quản lý hóa đơn</a
             >
           </li>
           <li>
-            <a class="text-primary" href="/admin/subject-management"
-              >Quản lý môn học</a
+            <a
+              class:active={adminActiveTab === "user"}
+              href="/admin/user-management">Quản lý tài khoản</a
+            >
+          </li>
+          <li>
+            <a
+              class:active={adminActiveTab === "subject"}
+              href="/admin/subject-management">Quản lý môn học</a
             >
           </li>
         </ul>
@@ -295,6 +338,9 @@
   .admin-instructor-nav {
     display: flex;
     align-items: center;
+    gap: 1rem;
+    width: 100%;
+    justify-content: space-between;
   }
 
   .admin-instructor-nav ul {
@@ -302,19 +348,47 @@
     list-style: none;
     margin: 0;
     padding: 0;
+    gap: 0.6rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
   }
 
   .admin-instructor-nav li {
-    margin-right: 2rem;
+    margin-right: 0;
+    flex: 0 0 auto;
   }
 
   .admin-instructor-nav a {
-    color: #333;
+    color: #374151;
     text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0.48rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-weight: 600;
+    font-size: 0.94rem;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    background: #f8fafc;
+  }
+
+  .admin-instructor-nav a:hover {
+    background: #eef2ff;
+    color: #1e40af;
+  }
+
+  .admin-instructor-nav a.active {
+    background: linear-gradient(135deg, #0b5fff, #1f7bff);
+    color: #fff;
+    border-color: #0b5fff;
+    box-shadow: 0 8px 16px rgba(11, 95, 255, 0.2);
   }
 
   .user-profile {
-    margin-left: 2rem;
+    margin-left: 0;
+    flex-shrink: 0;
   }
 
   /* CSS cho guest/student nav */
@@ -384,5 +458,17 @@
 
   .instructor-nav a {
     text-decoration: none;
+  }
+
+  @media (max-width: 1080px) {
+    .admin-instructor-nav {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.7rem;
+    }
+
+    .user-profile {
+      align-self: flex-end;
+    }
   }
 </style>

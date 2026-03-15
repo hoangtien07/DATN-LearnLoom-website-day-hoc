@@ -1,7 +1,6 @@
 <script>
   import { onMount } from "svelte";
   import { getUsers, updateUser, deleteUser } from "$lib/js/api";
-  import { goto } from "$app/navigation";
   import {
     Table,
     Button,
@@ -16,8 +15,31 @@
   } from "@sveltestrap/sveltestrap";
 
   let users = [];
+  let searchQuery = "";
   let isEditing = false;
   let editingUser = null;
+
+  $: filteredUsers = users.filter((account) => {
+    const keyword = searchQuery.trim().toLowerCase();
+
+    if (!keyword) {
+      return true;
+    }
+
+    return (
+      account.username?.toLowerCase().includes(keyword) ||
+      account.email?.toLowerCase().includes(keyword) ||
+      account.role?.toLowerCase().includes(keyword)
+    );
+  });
+
+  $: adminCount = users.filter((account) => account.role === "admin").length;
+  $: instructorCount = users.filter(
+    (account) => account.role === "instructor",
+  ).length;
+  $: studentCount = users.filter(
+    (account) => account.role === "student",
+  ).length;
 
   onMount(async () => {
     await fetchUsers();
@@ -65,7 +87,96 @@
   };
 </script>
 
-<h1>Quản lý tài khoản</h1>
+<section class="admin-shell">
+  <div class="admin-hero">
+    <h1>Quản lý tài khoản</h1>
+    <p>
+      Cập nhật hồ sơ người dùng, điều chỉnh vai trò và quản trị vòng đời tài
+      khoản trên nền tảng.
+    </p>
+  </div>
+
+  <div class="admin-stats-grid">
+    <article class="admin-stat-card">
+      <p class="admin-stat-label">Tổng tài khoản</p>
+      <p class="admin-stat-value">{users.length}</p>
+    </article>
+    <article class="admin-stat-card">
+      <p class="admin-stat-label">Học viên</p>
+      <p class="admin-stat-value">{studentCount}</p>
+    </article>
+    <article class="admin-stat-card">
+      <p class="admin-stat-label">Giảng viên</p>
+      <p class="admin-stat-value">{instructorCount}</p>
+    </article>
+    <article class="admin-stat-card">
+      <p class="admin-stat-label">Quản trị viên</p>
+      <p class="admin-stat-value">{adminCount}</p>
+    </article>
+  </div>
+
+  <div class="admin-card">
+    <div class="admin-toolbar">
+      <div class="toolbar-search">
+        <Input
+          type="text"
+          placeholder="Tìm kiếm username, email hoặc vai trò..."
+          bind:value={searchQuery}
+        />
+      </div>
+    </div>
+
+    {#if filteredUsers.length === 0}
+      <div class="admin-empty-state">Không có người dùng phù hợp.</div>
+    {:else}
+      <div class="admin-table-wrap">
+        <Table striped bordered hover responsive>
+          <thead>
+            <tr>
+              <th>STT</th>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each filteredUsers as user, index}
+              <tr>
+                <td>{index + 1}</td>
+                <td>{user.username}</td>
+                <td>{user.email}</td>
+                <td>{user.role}</td>
+                <td>
+                  {#if user.role !== "admin"}
+                    <div class="admin-page-actions">
+                      <Button
+                        color="primary"
+                        outline
+                        size="sm"
+                        on:click={() => handleEditUser(user)}
+                      >
+                        Chỉnh sửa
+                      </Button>
+                      <Button
+                        color="danger"
+                        outline
+                        size="sm"
+                        on:click={() => handleDeleteUser(user._id)}
+                      >
+                        Xóa
+                      </Button>
+                    </div>
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </Table>
+      </div>
+    {/if}
+  </div>
+</section>
 
 {#if isEditing}
   <Modal isOpen={isEditing} toggle={() => (isEditing = false)}>
@@ -111,44 +222,15 @@
   </Modal>
 {/if}
 
-<Table striped bordered hover responsive>
-  <thead>
-    <tr>
-      <th>STT</th>
-      <th>Username</th>
-      <th>Email</th>
-      <th>Role</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {#each users as user, index}
-      <tr>
-        <td>{index + 1}</td>
-        <td>{user.username}</td>
-        <td>{user.email}</td>
-        <td>{user.role}</td>
-        <td>
-          {#if user.role !== "admin"}
-            <Button
-              color="primary"
-              outline
-              size="sm"
-              on:click={() => handleEditUser(user)}
-            >
-              Chỉnh sửa
-            </Button>
-            <Button
-              color="danger"
-              outline
-              size="sm"
-              on:click={() => handleDeleteUser(user._id)}
-            >
-              Xóa
-            </Button>
-          {/if}
-        </td>
-      </tr>
-    {/each}
-  </tbody>
-</Table>
+<style>
+  :global(.admin-toolbar .toolbar-search .form-control) {
+    border: none;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  :global(.admin-toolbar .toolbar-search .form-control:focus) {
+    box-shadow: none;
+  }
+</style>

@@ -37,7 +37,7 @@
   };
 </script>
 
-{#if $instructor && $instructor.role === "instructor"}
+{#if $instructor && ($instructor.role === "instructor" || $instructor.role === "admin")}
   {#if course}
     <!-- <CourseEditNav courseName={course.name} /> -->
     <div class="body">
