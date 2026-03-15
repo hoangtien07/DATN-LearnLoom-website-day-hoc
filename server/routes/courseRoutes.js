@@ -30,8 +30,20 @@ import {
   removeCourseFromFavorites,
   getEnrolledStudents,
   softDeleteCourse,
+  hideCourse,
+  unhideCourse,
+  publishCourse,
+  unpublishCourse,
+  getHiddenCoursesByInstructor,
+  getDeletedCoursesAdmin,
+  restoreDeletedCourse,
+  toggleLessonVisibility,
 } from "../controllers/courseController.js";
-import { isAuthenticated, checkRole } from "../middleware/isAuthenticated.js";
+import {
+  isAuthenticated,
+  checkRole,
+  checkRoles,
+} from "../middleware/isAuthenticated.js";
 
 const router = express.Router();
 
@@ -45,6 +57,19 @@ router.get("/:slug/sections", getSectionsByCourseSlug);
 router.get("/:slug", getCourseBySlug);
 // Lấy các khóa học đã tạo của giáo viên
 router.get("/instructor/:instructorId", getCourseByInstructor);
+// Lấy các khóa học đã ẩn của giảng viên
+router.get(
+  "/instructor/:instructorId/hidden",
+  isAuthenticated,
+  getHiddenCoursesByInstructor,
+);
+// Admin: lấy danh sách khóa học bị xóa mềm
+router.get(
+  "/admin/deleted",
+  isAuthenticated,
+  checkRole("admin"),
+  getDeletedCoursesAdmin,
+);
 // Lấy trạng thái bài kiểm tra của học sinh
 router.get(
   "/assignments/:assignmentId/user/:userId/status",
@@ -72,14 +97,59 @@ router.get("/", getCourses);
 
 // Cập nhật bài học/ bài kiểm tra
 router.put("/items/:itemType/:itemId", updateItem);
+// Bật/tắt hiển thị bài học
+router.put(
+  "/items/:itemType/:itemId/visibility",
+  isAuthenticated,
+  checkRoles(["admin", "instructor"]),
+  toggleLessonVisibility,
+);
 // router.put("/:slug/sections/reorder", reorderSections);
 // router.put("/:slug/sections/:sectionId/reorder", reorderItemsInSection);
 // Cập nhật tên chương
 router.put("/:slug/sections/:sectionId", updateSection);
 // Cập nhật tiến độ khóa học
 router.put("/:slug/progress", updateCourseProgress);
+// Ẩn / Hiện khóa học
+router.put(
+  "/:slug/hide",
+  isAuthenticated,
+  checkRoles(["admin", "instructor"]),
+  hideCourse,
+);
+router.put(
+  "/:slug/unhide",
+  isAuthenticated,
+  checkRoles(["admin", "instructor"]),
+  unhideCourse,
+);
+// Xuất bản / Hủy xuất bản khóa học
+router.put(
+  "/:slug/publish",
+  isAuthenticated,
+  checkRoles(["admin", "instructor"]),
+  publishCourse,
+);
+router.put(
+  "/:slug/unpublish",
+  isAuthenticated,
+  checkRoles(["admin", "instructor"]),
+  unpublishCourse,
+);
+// Admin: khôi phục khóa học bị xóa mềm
+router.put(
+  "/:slug/restore",
+  isAuthenticated,
+  checkRole("admin"),
+  restoreDeletedCourse,
+);
 // Cập nhật khóa học
-router.put("/:slug", isAuthenticated, checkRole("admin"), updateCourse);
+router.put(
+  "/:slug",
+  isAuthenticated,
+  checkRoles(["admin", "instructor"]),
+  updateCourse,
+);
 
 // --- POST Routes ---
 
@@ -94,7 +164,12 @@ router.post("/:slug/sections", addSection);
 // Nộp bài kiểm tra
 router.post("/assignments/:assignmentId/submit", submitQuiz);
 // Tạo khóa học
-router.post("/", isAuthenticated, checkRole("admin"), createCourse);
+router.post(
+  "/",
+  isAuthenticated,
+  checkRoles(["admin", "instructor"]),
+  createCourse,
+);
 
 // --- DELETE Routes ---
 
@@ -104,7 +179,12 @@ router.delete("/favorite/:courseId/:userId", removeCourseFromFavorites);
 router.delete("/:slug/sections/:sectionId/items/:itemId", deleteItem);
 // Xóa chương
 router.delete("/:slug/sections/:sectionId", deleteSection);
-// Xóa khóa học (soft delete)
-router.delete("/:slug", isAuthenticated, checkRole("admin"), softDeleteCourse);
+// Xóa khóa học (soft delete - giảng viên/admin)
+router.delete(
+  "/:slug",
+  isAuthenticated,
+  checkRoles(["admin", "instructor"]),
+  softDeleteCourse,
+);
 
 export default router;

@@ -8,6 +8,7 @@
     deleteSection,
     deleteItem,
     fetchCourseBySlug,
+    toggleLessonVisibility,
   } from "$lib/js/api";
   import {
     Button,
@@ -26,6 +27,7 @@
   let newLessonName = "";
   let currentSectionIndex = null;
   let itemNames = {};
+  let itemVisible = {};
   let statusMessage = "";
   let statusVariant = "";
   let itemsHydrateKey = "";
@@ -126,13 +128,25 @@
 
     try {
       const resolved = await Promise.all(
-        entries.map(async ([id, type]) => [id, await getItemName(type, id)]),
+        entries.map(async ([id, type]) => {
+          try {
+            const data = await getItem(type, id);
+            return [id, data];
+          } catch {
+            return [id, null];
+          }
+        }),
       );
 
-      itemNames = {
-        ...itemNames,
-        ...Object.fromEntries(resolved),
-      };
+      const nameEntries = [];
+      const visEntries = [];
+      for (const [id, data] of resolved) {
+        nameEntries.push([id, data?.name ?? "Unknown Item"]);
+        visEntries.push([id, data?.visible !== false]);
+      }
+
+      itemNames = { ...itemNames, ...Object.fromEntries(nameEntries) };
+      itemVisible = { ...itemVisible, ...Object.fromEntries(visEntries) };
 
       itemsHydrateKey = nextKey;
     } finally {
@@ -203,6 +217,21 @@
 
   const handleSelectLesson = (item) => {
     dispatch("selectLesson", item);
+  };
+
+  const handleToggleItemVisibility = async (item) => {
+    try {
+      await toggleLessonVisibility(item.itemType, item.itemId);
+      const wasVisible = itemVisible[item.itemId] !== false;
+      itemVisible = { ...itemVisible, [item.itemId]: !wasVisible };
+      setStatus(
+        !wasVisible ? "Bài học đã hiển thị trở lại." : "Bài học đã được ẩn.",
+        "success",
+      );
+    } catch (error) {
+      console.error("Error toggling lesson visibility:", error);
+      setStatus("Không thể thay đổi trạng thái hiển thị.", "error");
+    }
   };
 
   onMount(async () => {
@@ -342,15 +371,37 @@
 
       <ul class="item-list">
         {#each section.items as item, itemIndex}
-          <li>
+          <li class:item-hidden={itemVisible[item.itemId] === false}>
             <button
               type="button"
               class="item"
               on:click={() => handleSelectLesson(item)}
             >
-              <span>{itemNames[item.itemId] || "Đang tải..."}</span>
+              <span>
+                {itemNames[item.itemId] || "Đang tải..."}
+                {#if itemVisible[item.itemId] === false}
+                  <span class="hidden-tag">ẩn</span>
+                {/if}
+              </span>
               <small>{item.itemType === "lesson" ? "Bài học" : "Bài tập"}</small
               >
+            </button>
+
+            <button
+              type="button"
+              class="item-vis-btn {itemVisible[item.itemId] === false
+                ? 'is-hidden'
+                : ''}"
+              title={itemVisible[item.itemId] === false
+                ? "Đang ẩn – Nhấn để hiện"
+                : "Đang hiện – Nhấn để ẩn"}
+              on:click={() => handleToggleItemVisibility(item)}
+            >
+              {#if itemVisible[item.itemId] === false}
+                <i class="bi bi-eye-slash"></i>
+              {:else}
+                <i class="bi bi-eye"></i>
+              {/if}
             </button>
 
             <Button
@@ -478,6 +529,50 @@
 
   .section-footer {
     margin-top: 0.55rem;
+  }
+
+  .item-vis-btn {
+    background: none;
+    border: 1px solid #d7e4ff;
+    border-radius: 8px;
+    padding: 0.3rem 0.45rem;
+    color: #4e6592;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition:
+      background 0.15s,
+      color 0.15s;
+    flex-shrink: 0;
+  }
+
+  .item-vis-btn:hover {
+    background: #edf4ff;
+    color: #1a4fa3;
+  }
+
+  .item-vis-btn.is-hidden {
+    border-color: #fca5a5;
+    color: #991b1b;
+    background: #fff5f5;
+  }
+
+  .item-vis-btn.is-hidden:hover {
+    background: #ffe4e4;
+  }
+
+  .hidden-tag {
+    font-size: 0.68rem;
+    background: #f3f4f6;
+    color: #6b7280;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  :global(.item-list li.item-hidden .item) {
+    opacity: 0.6;
   }
 
   .modal-help {

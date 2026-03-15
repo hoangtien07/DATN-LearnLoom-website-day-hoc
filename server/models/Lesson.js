@@ -8,8 +8,9 @@ const baseLessonSchema = new mongoose.Schema(
     name: { type: String, required: true },
     description: { type: String },
     duration: { type: Number }, // Duration in minutes
+    visible: { type: Boolean, default: true },
   },
-  { timestamps: true, discriminatorKey: "type" }
+  { timestamps: true, discriminatorKey: "type" },
 );
 
 // Text Lesson

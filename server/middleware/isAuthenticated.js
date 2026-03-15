@@ -24,6 +24,16 @@ export const checkRole = (role) => {
     if (req.isAuthenticated() && req.user.role === role) {
       return next();
     }
-    res.status(403).send("Bạn không có quyền truy cập.");
+    res.status(403).json({ message: "Bạn không có quyền truy cập." });
+  };
+};
+
+// Cho phép nhiều role cùng lúc
+export const checkRoles = (roles) => {
+  return (req, res, next) => {
+    if (req.isAuthenticated() && roles.includes(req.user.role)) {
+      return next();
+    }
+    res.status(403).json({ message: "Bạn không có quyền truy cập." });
   };
 };

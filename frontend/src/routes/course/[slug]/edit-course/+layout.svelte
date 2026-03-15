@@ -3,6 +3,7 @@
   import { fetchCourseBySlug } from "$lib/js/api";
   import { page } from "$app/stores";
   import CourseEditNav from "./CourseEditNav.svelte";
+  import Breadcrumbs from "$lib/components/Breadcrumbs.svelte";
 
   const slug = $page.params.slug;
   let course = null;
@@ -17,6 +18,25 @@
     }
   });
 
+  const tabLabels = {
+    curriculum: "Mục lục",
+    settings: "Cài đặt",
+    faq: "Hỏi đáp",
+  };
+  $: currentTab = Object.keys(tabLabels).find((key) =>
+    $page.url.pathname.includes(`/edit-course/${key}`),
+  );
+  $: breadcrumbItems = [
+    { label: "Dashboard giảng viên", href: "/instructor/dashboard" },
+    {
+      label: course?.name ?? "Khóa học",
+      href: `/course/${slug}/edit-course/curriculum`,
+    },
+    {
+      label: currentTab ? tabLabels[currentTab] : "Chỉnh sửa",
+    },
+  ];
+
   $: sectionCount = course?.sections?.length ?? 0;
   $: lessonCount =
     course?.sections?.reduce(
@@ -28,6 +48,7 @@
 
 <section class="course-edit-shell">
   {#if course}
+    <Breadcrumbs items={breadcrumbItems} />
     <div class="course-edit-hero">
       <h1>Không gian chỉnh sửa khóa học</h1>
       <p>

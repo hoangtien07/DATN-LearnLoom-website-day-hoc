@@ -164,22 +164,7 @@
     {:else if $user && $user.role === "instructor" && isInstructorPage}
       <!-- Header cho giảng viên -->
       <nav class="instructor-nav">
-        <ul>
-          <li>
-            <a class="text-primary mx-2" href="/instructor/dashboard"
-              >Dashboard</a
-            >
-          </li>
-          <li>
-            <a class="text-primary mx-2" href="/instructor/gradebook"
-              >Gradebook</a
-            >
-          </li>
-          <li>
-            <a class="text-primary mx-2" href="/instructor/earnings">Earnings</a
-            >
-          </li>
-        </ul>
+        <div class="instructor-context-label">Instructor workspace</div>
         <div class="d-flex align-items-center">
           <a href="/" class="text-primary me-3">Học viên</a>
           <Dropdown>
@@ -443,21 +428,21 @@
   .instructor-nav {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    width: 100%;
   }
 
-  .instructor-nav ul {
-    display: flex;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .instructor-nav li {
-    margin-right: 2rem;
-  }
-
-  .instructor-nav a {
-    text-decoration: none;
+  .instructor-context-label {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 0.42rem 0.78rem;
+    border-radius: 999px;
+    background: #eef4ff;
+    color: #1e3f86;
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
   }
 
   @media (max-width: 1080px) {

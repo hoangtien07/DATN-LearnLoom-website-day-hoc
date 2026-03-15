@@ -196,13 +196,107 @@ export const updateCourse = async (slug, course) => {
   }
 };
 
-// Xóa khóa học
+// Xóa khóa học (soft delete)
 export const deleteCourse = async (slug) => {
   try {
     const response = await apiClient.delete(`/api/courses/${slug}`);
     return response.data;
   } catch (error) {
     console.error(`Error deleting course with slug ${slug}:`, error);
+    throw error;
+  }
+};
+
+// Ẩn khóa học
+export const hideCourse = async (slug) => {
+  try {
+    const response = await apiClient.put(`/api/courses/${slug}/hide`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error hiding course ${slug}:`, error);
+    throw error;
+  }
+};
+
+// Hiện lại khóa học
+export const unhideCourse = async (slug) => {
+  try {
+    const response = await apiClient.put(`/api/courses/${slug}/unhide`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error unhiding course ${slug}:`, error);
+    throw error;
+  }
+};
+
+// Xuất bản khóa học
+export const publishCourse = async (slug) => {
+  try {
+    const response = await apiClient.put(`/api/courses/${slug}/publish`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error publishing course ${slug}:`, error);
+    throw error;
+  }
+};
+
+// Hủy xuất bản khóa học (về bản nháp)
+export const unpublishCourse = async (slug) => {
+  try {
+    const response = await apiClient.put(`/api/courses/${slug}/unpublish`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error unpublishing course ${slug}:`, error);
+    throw error;
+  }
+};
+
+// Lấy các khóa học đã ẩn của giảng viên
+export const fetchHiddenCoursesByInstructor = async (instructorId) => {
+  try {
+    const response = await apiClient.get(
+      `/api/courses/instructor/${instructorId}/hidden`,
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response?.status === 404) return [];
+    console.error(`Error fetching hidden courses:`, error);
+    throw error;
+  }
+};
+
+// Admin: lấy danh sách khóa học bị xóa mềm
+export const fetchDeletedCoursesAdmin = async () => {
+  try {
+    const response = await apiClient.get(`/api/courses/admin/deleted`);
+    return response.data;
+  } catch (error) {
+    if (error.response?.status === 404) return [];
+    console.error(`Error fetching deleted courses:`, error);
+    throw error;
+  }
+};
+
+// Admin: khôi phục khóa học bị xóa mềm
+export const restoreDeletedCourse = async (slug) => {
+  try {
+    const response = await apiClient.put(`/api/courses/${slug}/restore`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error restoring course ${slug}:`, error);
+    throw error;
+  }
+};
+
+// Bật/tắt hiển thị bài học
+export const toggleLessonVisibility = async (itemType, itemId) => {
+  try {
+    const response = await apiClient.put(
+      `/api/courses/items/${itemType}/${itemId}/visibility`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error(`Error toggling lesson visibility:`, error);
     throw error;
   }
 };

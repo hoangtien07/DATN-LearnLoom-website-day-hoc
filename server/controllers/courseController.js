@@ -119,13 +119,40 @@ export const updateCourse = async (req, res) => {
       req.body.totalDuration = normalizedTotalDuration;
     }
 
-    const course = await Course.findOneAndUpdate(
-      { slug: req.params.slug },
-      req.body,
-      {
-        new: true,
-      },
-    );
+    const filter = { slug: req.params.slug };
+    // Giảng viên chỉ sửa khóa học của mình
+    if (req.user && req.user.role === "instructor") {
+      filter.teacher = req.user._id;
+    }
+
+    // Không cho chuyển về nháp nếu khóa học đã có học viên theo học.
+    if (
+      Object.prototype.hasOwnProperty.call(req.body, "is_published") &&
+      req.body.is_published === false
+    ) {
+      const existingCourse = await Course.findOne(filter).select(
+        "is_published totalStudentsEnrolled",
+      );
+
+      if (!existingCourse) {
+        return res.status(404).json({ message: "Course not found" });
+      }
+
+      if (
+        existingCourse.is_published &&
+        (existingCourse.totalStudentsEnrolled || 0) > 0
+      ) {
+        return res.status(409).json({
+          code: "COURSE_HAS_ENROLLED_STUDENTS",
+          message:
+            "Khóa học đang có học viên theo học nên không thể chuyển về bản nháp. Hãy dùng thao tác ẩn/ngừng bán để dừng nhận học viên mới.",
+        });
+      }
+    }
+
+    const course = await Course.findOneAndUpdate(filter, req.body, {
+      new: true,
+    });
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
@@ -135,18 +162,187 @@ export const updateCourse = async (req, res) => {
   }
 };
 
-// Soft delete a course (set visible to false)
+// Soft delete a course giảng viên (is_deleted = true, admin vẫn xem được)
 export const softDeleteCourse = async (req, res) => {
   try {
+    const filter = { slug: req.params.slug };
+    if (req.user && req.user.role === "instructor") {
+      filter.teacher = req.user._id;
+    }
     const course = await Course.findOneAndUpdate(
-      { slug: req.params.slug },
+      filter,
+      { is_deleted: true },
+      { new: true },
+    );
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    res.json({ message: "Course soft deleted" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Ẩn khóa học (visible = false), có thể khôi phục
+export const hideCourse = async (req, res) => {
+  try {
+    const filter = { slug: req.params.slug, is_deleted: { $ne: true } };
+    if (req.user && req.user.role === "instructor") {
+      filter.teacher = req.user._id;
+    }
+    const course = await Course.findOneAndUpdate(
+      filter,
       { visible: false },
       { new: true },
     );
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
-    res.json({ message: "Course moved to trash" });
+    res.json({ message: "Course hidden", course });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Hiện lại khóa học (visible = true)
+export const unhideCourse = async (req, res) => {
+  try {
+    const filter = { slug: req.params.slug, is_deleted: { $ne: true } };
+    if (req.user && req.user.role === "instructor") {
+      filter.teacher = req.user._id;
+    }
+    const course = await Course.findOneAndUpdate(
+      filter,
+      { visible: true },
+      { new: true },
+    );
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    res.json({ message: "Course visible", course });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Xuất bản khóa học
+export const publishCourse = async (req, res) => {
+  try {
+    const filter = { slug: req.params.slug, is_deleted: { $ne: true } };
+    if (req.user && req.user.role === "instructor") {
+      filter.teacher = req.user._id;
+    }
+    const course = await Course.findOneAndUpdate(
+      filter,
+      { is_published: true, published_at: new Date() },
+      { new: true },
+    );
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    res.json({ message: "Course published", course });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Bỏ xuất bản khóa học (về bản nháp)
+export const unpublishCourse = async (req, res) => {
+  try {
+    const filter = { slug: req.params.slug, is_deleted: { $ne: true } };
+    if (req.user && req.user.role === "instructor") {
+      filter.teacher = req.user._id;
+    }
+    const currentCourse = await Course.findOne(filter).select(
+      "is_published totalStudentsEnrolled",
+    );
+
+    if (!currentCourse) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    if (
+      currentCourse.is_published &&
+      (currentCourse.totalStudentsEnrolled || 0) > 0
+    ) {
+      return res.status(409).json({
+        code: "COURSE_HAS_ENROLLED_STUDENTS",
+        message:
+          "Khóa học đang có học viên theo học nên không thể chuyển về bản nháp. Hãy dùng thao tác ẩn/ngừng bán để dừng nhận học viên mới.",
+      });
+    }
+
+    const course = await Course.findOneAndUpdate(
+      filter,
+      { is_published: false },
+      { new: true },
+    );
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    res.json({ message: "Course unpublished", course });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Lấy danh sách khóa học đã ẩn của giảng viên
+export const getHiddenCoursesByInstructor = async (req, res) => {
+  try {
+    const courses = await Course.find({
+      teacher: req.params.instructorId,
+      visible: false,
+      is_deleted: { $ne: true },
+    }).populate("teacher");
+    res.json(courses);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Admin: lấy danh sách khóa học bị xóa mềm
+export const getDeletedCoursesAdmin = async (req, res) => {
+  try {
+    const courses = await Course.find({ is_deleted: true }).populate("teacher");
+    res.json(courses);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Admin: khôi phục khóa học bị xóa mềm
+export const restoreDeletedCourse = async (req, res) => {
+  try {
+    const course = await Course.findOneAndUpdate(
+      { slug: req.params.slug, is_deleted: true },
+      { is_deleted: false },
+      { new: true },
+    );
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    res.json({ message: "Course restored", course });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Bật/tắt hiển thị bài học
+export const toggleLessonVisibility = async (req, res) => {
+  try {
+    const { itemType, itemId } = req.params;
+    if (itemType !== "lesson") {
+      return res
+        .status(400)
+        .json({ message: "Only lessons support visibility toggle" });
+    }
+    const lesson = await Lesson.findById(itemId);
+    if (!lesson) {
+      return res.status(404).json({ message: "Lesson not found" });
+    }
+    lesson.visible = !lesson.visible;
+    await lesson.save();
+    res.json({ message: "Lesson visibility updated", visible: lesson.visible });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -198,6 +394,7 @@ export const getCourseByInstructor = async (req, res) => {
   try {
     const courses = await Course.find({
       teacher: req.params.instructorId,
+      is_deleted: { $ne: true },
     }).populate("teacher");
     if (!courses || courses.length === 0) {
       return res
@@ -216,7 +413,11 @@ export const getCourses = async (req, res) => {
     const { subjects, levels, durations, prices } = req.query;
 
     // Build the filter object
-    const filters = { visible: true };
+    const filters = {
+      visible: true,
+      is_published: true,
+      is_deleted: { $ne: true },
+    };
     const andConditions = [];
 
     if (subjects) {

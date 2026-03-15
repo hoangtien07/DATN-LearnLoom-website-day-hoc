@@ -31,6 +31,15 @@
     comment: "",
   };
 
+  const avatarInitial = (name) => {
+    if (!name) return "U";
+    return name.trim().charAt(0).toUpperCase();
+  };
+
+  const hasImage = (value) =>
+    typeof value === "string" &&
+    (value.startsWith("http") || value.startsWith("/"));
+
   // Config cho rating star
   const config = {
     fullColor: "#ffa500",
@@ -147,22 +156,24 @@
 </script>
 
 <div class="course-reviews">
-  <h2>Đánh giá khóa học</h2>
+  <h2>Đánh giá từ học viên</h2>
   <div class="review-summary">
     <div class="rating-info">
       <div class="average-rating">
-        <p>
-          {averageRating}
+        <p class="average-value">
+          {averageRating || "0.0"}
           <StarRating {config} rating={Number(averageRating)} />
         </p>
-        <p>({reviews.length} đánh giá)</p>
+        <p class="average-caption">{reviews.length} đánh giá</p>
       </div>
       <div class="rating-distribution">
         {#each ratingCounts as count, index}
           <div class="rating-row">
             <span>{index + 1} sao:</span>
             <div style="flex:1;">
-              <Progress value={(count * 100) / reviews.length} color="warning"
+              <Progress
+                value={reviews.length ? (count * 100) / reviews.length : 0}
+                color="warning"
               ></Progress>
             </div>
 
@@ -181,7 +192,7 @@
       </div>
     </div>
 
-    <div style="flex:1; margin-left:40px">
+    <div class="review-column">
       {#if user}
         {#if isEnrolled}
           {#if isEdited || !userReview}
@@ -222,19 +233,22 @@
                     placeholder="Viết đánh giá của bạn..."
                   />
                 {/if}
-                <button type="submit"
-                  >{isEdited ? "Lưu đánh giá" : "Gửi đánh giá"}</button
-                >
-                {#if isEdited}
-                  <button
-                    type="button"
-                    on:click={() => {
-                      isEdited = false;
-                      editingReviewId = null;
-                      editingReview = { rating: 0, comment: "" };
-                    }}>Hủy</button
+                <div class="review-form-actions">
+                  <button type="submit" class="review-btn primary"
+                    >{isEdited ? "Lưu đánh giá" : "Gửi đánh giá"}</button
                   >
-                {/if}
+                  {#if isEdited}
+                    <button
+                      type="button"
+                      class="review-btn ghost"
+                      on:click={() => {
+                        isEdited = false;
+                        editingReviewId = null;
+                        editingReview = { rating: 0, comment: "" };
+                      }}>Hủy</button
+                    >
+                  {/if}
+                </div>
               </form>
             </div>
           {/if}
@@ -244,31 +258,51 @@
               <div class="review-item">
                 <div class="review-header">
                   <div class="review-thumbnail">
-                    <img src={userReview.thumbnail} alt="" />
-                    <span>{userReview.thumbnail}</span>
-                  </div>
-                  <div class="star-rating">
-                    {#each { length: 5 } as _, i}
-                      <i
-                        class="bi bi-star-fill"
-                        class:filled={userReview.rating > i}
+                    {#if hasImage(userReview.thumbnail)}
+                      <img
+                        src={userReview.thumbnail}
+                        alt={userReview.userName}
                       />
-                    {/each}
-                  </div>
-                  <p class="userId">
-                    - {userReview.userName} -
-                    {#if userReview.updatedAt}
-                      {getTime(userReview.updatedAt)}
                     {:else}
-                      {getTime(userReview.createdAt)}
+                      <span class="thumbnail-fallback"
+                        >{avatarInitial(userReview.userName)}</span
+                      >
                     {/if}
-                  </p>
-                  <button on:click={() => handleEditReview(userReview)}>
-                    Sửa
-                  </button>
-                  <button on:click={() => handleDeleteReview(userReview._id)}>
-                    Xóa
-                  </button>
+                  </div>
+                  <div class="review-main-meta">
+                    <div class="star-rating">
+                      {#each { length: 5 } as _, i}
+                        <i
+                          class="bi bi-star-fill"
+                          class:filled={userReview.rating > i}
+                        />
+                      {/each}
+                    </div>
+                    <p class="userId">
+                      {userReview.userName}
+                      <span>
+                        {#if userReview.updatedAt}
+                          {getTime(userReview.updatedAt)}
+                        {:else}
+                          {getTime(userReview.createdAt)}
+                        {/if}
+                      </span>
+                    </p>
+                  </div>
+                  <div class="review-actions">
+                    <button
+                      class="review-btn ghost"
+                      on:click={() => handleEditReview(userReview)}
+                    >
+                      Sửa
+                    </button>
+                    <button
+                      class="review-btn danger"
+                      on:click={() => handleDeleteReview(userReview._id)}
+                    >
+                      Xóa
+                    </button>
+                  </div>
                 </div>
                 <p>{userReview.comment}</p>
               </div>
@@ -292,11 +326,18 @@
             <div class="review-item">
               <div class="review-header">
                 <div class="review-thumbnail">
-                  <img src={review.thumbnail} alt="" />
+                  {#if hasImage(review.thumbnail)}
+                    <img src={review.thumbnail} alt={review.userName} />
+                  {:else}
+                    <span class="thumbnail-fallback"
+                      >{avatarInitial(review.userName)}</span
+                    >
+                  {/if}
                 </div>
-                <div>
+                <div class="review-main-meta">
                   <p class="userId">
-                    - {review.userName} - {getTime(review.updatedAt)}
+                    {review.userName}
+                    <span>{getTime(review.updatedAt)}</span>
                   </p>
                   <div class="star-rating">
                     {#each { length: 5 } as _, i}
@@ -307,7 +348,7 @@
                     {/each}
                   </div>
 
-                  <p>{review.comment}</p>
+                  <p class="review-comment">{review.comment}</p>
                 </div>
 
                 <!-- {#if review.userId === userId}
@@ -335,85 +376,199 @@
 
 <style>
   .course-reviews {
-    margin-top: 2rem;
+    margin-top: 2.2rem;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 1rem;
+    background: #fff;
+    border: 1px solid #e2e8f4;
+    border-radius: 16px;
+    padding: 1rem;
+    box-shadow: 0 8px 24px rgba(15, 40, 90, 0.08);
   }
+
   h2 {
-    font-size: 24px;
-    font-weight: 600;
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #152f61;
   }
 
   .review-summary {
     display: flex;
-    gap: 2rem;
+    gap: 1.2rem;
+    align-items: flex-start;
   }
 
   .rating-info {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    flex-basis: 30%;
+    gap: 0.75rem;
+    flex-basis: 320px;
+    max-width: 360px;
+    background: #f8fbff;
+    border: 1px solid #dde8fa;
+    border-radius: 14px;
+    padding: 0.9rem;
+  }
+
+  .average-value {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #0f3268;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+  }
+
+  .average-caption {
+    margin: 0;
+    color: #5a6f95;
+    font-weight: 600;
   }
 
   .rating-row {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    margin-bottom: 0.5rem;
+    gap: 0.7rem;
+    margin-bottom: 0.45rem;
   }
+
   .rating-row span {
-    min-width: 52px;
+    min-width: 58px;
+    font-size: 0.9rem;
+    color: #2a3f67;
+    font-weight: 600;
+  }
+
+  .review-column {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .write-review,
+  .your-review,
+  .review-list {
+    border: 1px solid #e2e8f4;
+    border-radius: 14px;
+    background: #fff;
+    padding: 0.9rem;
+  }
+
+  .write-review h3,
+  .your-review h3,
+  .review-list h4 {
+    margin: 0 0 0.7rem;
+    font-size: 1.15rem;
+    color: #163567;
+    font-weight: 700;
   }
 
   .write-review textarea {
     width: 100%;
-    height: 80px;
+    min-height: 94px;
     resize: vertical;
-    margin-bottom: 0.5rem;
-    border: 1px solid #aaa;
+    margin-bottom: 0;
+    border: 1px solid #ccd8ec;
     border-radius: 8px;
     margin-top: 8px;
+    padding: 0.55rem 0.65rem;
+    color: #223963;
+  }
+
+  .review-form-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+  }
+
+  .review-btn {
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 0.4rem 0.72rem;
+    font-size: 0.86rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .review-btn.primary {
+    background: #1f63d6;
+    color: #fff;
+  }
+
+  .review-btn.ghost {
+    background: #fff;
+    border-color: #c8d6ef;
+    color: #1d3f77;
+  }
+
+  .review-btn.danger {
+    background: #fff;
+    border-color: #efc5c5;
+    color: #a33434;
   }
 
   .review-list {
-    margin-top: 2rem;
+    margin-top: 0.9rem;
   }
 
   .review-item {
-    border: 1px solid #ccc;
-    padding: 1rem;
-    margin-bottom: 1rem;
+    border: 1px solid #dbe5f6;
+    border-radius: 12px;
+    padding: 0.8rem;
+    margin-bottom: 0.65rem;
+    background: #fbfdff;
   }
 
   .review-header {
     display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 0.5rem;
+    align-items: flex-start;
+    gap: 0.8rem;
+    margin-bottom: 0.4rem;
+    justify-content: space-between;
+  }
+
+  .review-main-meta {
+    flex: 1;
+    min-width: 0;
   }
 
   .userId {
-    font-size: 0.8rem;
-    color: #666;
-    margin-bottom: 8px;
+    font-size: 0.88rem;
+    color: #27406e;
+    margin-bottom: 0.35rem;
+    font-weight: 700;
+  }
+
+  .userId span {
+    margin-left: 0.45rem;
+    color: #64789b;
+    font-weight: 500;
   }
 
   .star-rating {
     display: inline-flex;
     cursor: pointer;
-    margin-bottom: 8px;
+    margin-bottom: 0.35rem;
   }
 
   .star-rating .bi-star-fill {
-    font-size: 1.5rem;
-    color: #ccc; /* Màu sao chưa được chọn */
+    font-size: 1.35rem;
+    color: #c5cedd;
   }
 
   .star-rating .bi-star-fill.filled {
-    color: orange; /* Màu sao đã được chọn */
+    color: #f5b301;
   }
+
+  .review-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+
   .review-thumbnail {
     width: 48px;
     height: 48px;
@@ -424,5 +579,52 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+
+  .thumbnail-fallback {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    background: #2d5ab5;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .review-comment {
+    margin: 0;
+    color: #233a62;
+  }
+
+  @media (max-width: 980px) {
+    .review-summary {
+      flex-direction: column;
+    }
+
+    .rating-info {
+      flex-basis: auto;
+      max-width: none;
+      width: 100%;
+    }
+  }
+
+  @media (max-width: 680px) {
+    .course-reviews {
+      padding: 0.75rem;
+    }
+
+    .review-header {
+      flex-wrap: wrap;
+    }
+
+    .review-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .star-rating .bi-star-fill {
+      font-size: 1.15rem;
+    }
   }
 </style>

@@ -2,9 +2,7 @@
   import { onMount } from "svelte";
   import { fetchFilteredCourses, getSubjects } from "$lib/js/api";
   import {
-    ButtonGroup,
     Button,
-    Image,
     Container,
     Row,
     Col,
@@ -50,6 +48,23 @@
   let searchTerm = "";
   let filteredCourses = [];
   let lastHandledQuery = "";
+  const faqs = [
+    {
+      question: "Làm sao để chọn khóa học phù hợp?",
+      answer:
+        "Bạn có thể tìm theo môn học, cấp độ và thời lượng để thu hẹp lựa chọn theo mục tiêu học tập.",
+    },
+    {
+      question: "Tôi có thể học thử trước khi mua không?",
+      answer:
+        "Nhiều khóa học có bài học xem trước miễn phí để bạn đánh giá nội dung trước khi đăng ký.",
+    },
+    {
+      question: "Tôi có thể học trên điện thoại không?",
+      answer:
+        "Có, LearnLoom hỗ trợ trải nghiệm học tập tốt trên cả máy tính và thiết bị di động.",
+    },
+  ];
 
   const durationLabelToParam = {
     "Ít hơn 5 giờ": "0-5 giờ",
@@ -66,9 +81,9 @@
     ]),
   );
 
-  // Tạo ID duy nhất từ tên giá trị
-  function generateId(value) {
-    return value.replace(/\s+/g, "-").toLowerCase();
+  // Tạo ID duy nhất từ tên nhóm + giá trị
+  function generateId(group, value) {
+    return `${group}-${value}`.replace(/\s+/g, "-").toLowerCase();
   }
 
   const parseCsvParam = (params, key) => {
@@ -151,6 +166,16 @@
     navigateWithCurrentState();
   };
 
+  const clearAllFilters = () => {
+    selectedSubjects = [];
+    selectedLevels = [];
+    selectedDurations = [];
+    selectedPrices = [];
+    searchTerm = "";
+    sort = "";
+    applyFilters();
+  };
+
   const handleSortChange = (event) => {
     sort = event.target.value;
     applyFilters();
@@ -207,153 +232,148 @@
     );
   }
 
-  onMount(async () => {
-    subjects = await getSubjects();
-    subjects = subjects.map((subject) => subject.name);
-    if (browser) {
-      parseFiltersFromUrl();
-      lastHandledQuery = $page.url.searchParams.toString();
-    }
-
-    await fetchCoursesByCriteria();
-  });
-
-  // Thêm faqs
-
-  let faqs = [
-    {
-      question: "LearnLoom cung cấp những loại khóa học nào?",
-      answer:
-        "Có rất nhiều khóa học học trên LearnLoom, như lập trình, thiết kế, marketing...",
-    },
-    {
-      question: "Làm sao để đăng ký một khóa học trên LearnLoom?",
-      answer:
-        "Bạn cần đăng nhập và đăng ký khóa học bằng cách nhấp vào nút 'Đăng ký' trên trang khóa học.",
-    },
-    {
-      question:
-        "Các khóa học trên LearnLoom có tự học hay do giảng viên hướng dẫn?",
-      answer:
-        "Có các khóa học theo hình thức tự học hoặc có giảng viên hướng dẫn.",
-    },
-    {
-      question: "Thời lượng của các khóa học là bao lâu?",
-      answer:
-        "Thời lượng khóa học thay đổi từ vài tuần đến vài tháng tùy thuộc vào nội dung.",
-    },
-    {
-      question: "Tôi có nhận được chứng chỉ sau khi hoàn thành khóa học không?",
-      answer:
-        "Hiện tại hệ thống chưa có nhưng tính năng này đang được chúng tôi hoàn thiện.",
-    },
-    {
-      question: "Nếu tôi không hài lòng với khóa học thì sao?",
-      answer:
-        "Chúng tôi sẵn sàng lắng nghe ý kiến của bạn và phản hồi lại với giảng viên.",
-    },
-  ];
+  $: totalActiveFilters =
+    selectedSubjects.length +
+    selectedLevels.length +
+    selectedDurations.length +
+    selectedPrices.length;
 </script>
 
-<div class="d-flex mt-5">
-  <div class="filter-nav">
-    <!-- Ô tìm kiếm -->
-    <div>
-      <h4>Tìm kiếm</h4>
+<section class="course-catalog">
+  <aside class="filter-panel">
+    <div class="panel-header">
+      <h3>Tìm kiếm và bộ lọc</h3>
+      {#if totalActiveFilters > 0 || searchTerm.trim()}
+        <button
+          type="button"
+          class="clear-filter-btn"
+          on:click={clearAllFilters}
+        >
+          Xóa tất cả
+        </button>
+      {/if}
+    </div>
+
+    <label class="search-wrap" for="course-search">
+      <i class="bi bi-search"></i>
       <input
+        id="course-search"
         class="search"
         type="text"
         bind:value={searchTerm}
         on:input={handleSearchInput}
         placeholder="Nhập tên khóa học..."
       />
-    </div>
+    </label>
 
-    <h4 class="mb-1 mt-1">Bộ lọc</h4>
+    <p class="active-filter-hint">
+      {#if totalActiveFilters > 0 || searchTerm.trim()}
+        Đang áp dụng {totalActiveFilters + (searchTerm.trim() ? 1 : 0)} điều kiện
+      {:else}
+        Chưa áp dụng bộ lọc
+      {/if}
+    </p>
 
-    <!-- Bộ lọc Môn học -->
-    <div>
+    <div class="filter-group">
       <h4>Môn học</h4>
-      {#each subjects as subject}
-        <div>
-          <input
-            type="checkbox"
-            bind:group={selectedSubjects}
-            on:change={applyFilters}
-            value={subject}
-            id={generateId(subject)}
-          />
-          <label for={generateId(subject)}>{subject}</label>
-        </div>
-      {/each}
+      <div class="filter-options filter-options-scroll">
+        {#each subjects as subject}
+          <label class="filter-option" for={generateId("subject", subject)}>
+            <input
+              id={generateId("subject", subject)}
+              type="checkbox"
+              bind:group={selectedSubjects}
+              on:change={applyFilters}
+              value={subject}
+            />
+            <span>{subject}</span>
+          </label>
+        {/each}
+      </div>
     </div>
 
-    <!-- Bộ lọc Cấp độ -->
-    <div>
+    <div class="filter-group">
       <h4>Cấp độ</h4>
-      {#each levels as level}
-        <div>
-          <input
-            type="checkbox"
-            bind:group={selectedLevels}
-            on:change={applyFilters}
-            value={level}
-            id={generateId(level)}
-          />
-          <label for={generateId(level)}>{level}</label>
-        </div>
-      {/each}
+      <div class="filter-options">
+        {#each levels as level}
+          <label class="filter-option" for={generateId("level", level)}>
+            <input
+              id={generateId("level", level)}
+              type="checkbox"
+              bind:group={selectedLevels}
+              on:change={applyFilters}
+              value={level}
+            />
+            <span>{level}</span>
+          </label>
+        {/each}
+      </div>
     </div>
 
-    <!-- Bộ lọc Thời lượng -->
-    <div>
+    <div class="filter-group">
       <h4>Thời lượng</h4>
-      {#each durations as duration}
-        <div>
-          <input
-            type="checkbox"
-            bind:group={selectedDurations}
-            on:change={applyFilters}
-            value={duration}
-            id={generateId(duration)}
-          />
-          <label for={generateId(duration)}>{duration}</label>
-        </div>
-      {/each}
+      <div class="filter-options">
+        {#each durations as duration}
+          <label class="filter-option" for={generateId("duration", duration)}>
+            <input
+              id={generateId("duration", duration)}
+              type="checkbox"
+              bind:group={selectedDurations}
+              on:change={applyFilters}
+              value={duration}
+            />
+            <span>{duration}</span>
+          </label>
+        {/each}
+      </div>
     </div>
 
-    <!-- Bộ lọc Giá -->
-    <div>
+    <div class="filter-group">
       <h4>Giá</h4>
-      {#each prices as price}
-        <div>
-          <input
-            type="checkbox"
-            bind:group={selectedPrices}
-            on:change={applyFilters}
-            value={price}
-            id={generateId(price)}
-          />
-          <label for={generateId(price)}>{price}</label>
-        </div>
-      {/each}
+      <div class="filter-options">
+        {#each prices as price}
+          <label class="filter-option" for={generateId("price", price)}>
+            <input
+              id={generateId("price", price)}
+              type="checkbox"
+              bind:group={selectedPrices}
+              on:change={applyFilters}
+              value={price}
+            />
+            <span>{price}</span>
+          </label>
+        {/each}
+      </div>
     </div>
-  </div>
+  </aside>
 
-  <!-- Hiển thị danh sách khóa học -->
-  <div class="all-course">
-    <div class="sort-bar mb-4 text-end">
-      <label for="sort">Sắp xếp theo:</label>
-      <select id="sort" bind:value={sort} on:change={handleSortChange}>
-        <option value="">Mặc định</option>
-        <option value="popular">Phổ biến</option>
-        <option value="newest">Mới nhất</option>
-        <option value="rating">Đánh giá</option>
-      </select>
+  <div class="catalog-content">
+    <div class="catalog-toolbar">
+      <div>
+        <h2>Khóa học</h2>
+        <p>
+          {#if isLoading}
+            Đang tải danh sách khóa học...
+          {:else}
+            Hiển thị {filteredCourses.length} khóa học phù hợp
+          {/if}
+        </p>
+      </div>
+
+      <div class="sort-wrap">
+        <label for="sort">Sắp xếp theo</label>
+        <select id="sort" bind:value={sort} on:change={handleSortChange}>
+          <option value="">Mặc định</option>
+          <option value="popular">Phổ biến</option>
+          <option value="newest">Mới nhất</option>
+          <option value="rating">Đánh giá</option>
+        </select>
+      </div>
     </div>
+
     <CourseAll {filterCriteria} courses={filteredCourses} {sort} />
   </div>
-</div>
+</section>
 
 <Container class="my-5 pt-5">
   <Row>
@@ -382,42 +402,206 @@
 </Container>
 
 <style>
-  .filter-nav {
-    margin-right: 40px;
-    padding: 12px;
-    border: 1px solid #aaa;
-    border-radius: 8px;
-    margin-right: 24px;
-    height: fit-content;
+  .course-catalog {
+    margin-top: 1.2rem;
+    display: grid;
+    grid-template-columns: minmax(260px, 310px) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
   }
-  .all-course {
-    flex: 1;
+
+  .filter-panel {
+    border: 1px solid #d8e5ff;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 0.95rem;
+    box-shadow: 0 10px 26px rgba(15, 40, 90, 0.08);
+    position: sticky;
+    top: 84px;
+    max-height: calc(100vh - 100px);
+    overflow: auto;
   }
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .panel-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #123066;
+  }
+
+  .clear-filter-btn {
+    background: transparent;
+    border: none;
+    color: #1d4ed8;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid #cfddfb;
+    background: #f8fbff;
+    border-radius: 12px;
+    padding: 0.45rem 0.6rem;
+    margin-bottom: 0.5rem;
+    color: #4e6590;
+  }
+
   .search {
-    border: 1px solid #aaa;
-    line-height: 24px;
-    border-radius: 8px;
-    padding: 4px 8px;
-    margin-bottom: 16px;
+    flex: 1;
+    border: none;
+    background: transparent;
+    line-height: 1.25;
+    padding: 0;
+    min-width: 0;
   }
-  .filter-nav label {
-    margin-left: 4px;
+
+  .search:focus {
+    outline: none;
   }
-  .sort-bar {
-    padding: 8px;
-    border: 1px solid #aaa;
-    width: fit-content;
-    /* float: right; */
-    border-radius: 8px;
-    background-color: #f8f8f8;
+
+  .active-filter-hint {
+    margin: 0 0 0.75rem;
+    font-size: 0.8rem;
+    color: #5a6f96;
+    font-weight: 600;
   }
-  .sort-bar option {
-    background-color: inherit;
+
+  .filter-group {
+    margin-bottom: 0.8rem;
   }
-  h4 {
-    font-size: 18px;
+
+  .filter-group h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.92rem;
+    color: #153267;
+    font-weight: 700;
   }
-  .filter-nav label {
-    font-size: 16px;
+
+  .filter-options {
+    display: grid;
+    gap: 0.28rem;
+  }
+
+  .filter-options-scroll {
+    max-height: 190px;
+    overflow: auto;
+    padding-right: 4px;
+  }
+
+  .filter-option {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0;
+    color: #2c3f64;
+    font-size: 0.9rem;
+    padding: 0.16rem 0;
+    cursor: pointer;
+  }
+
+  .catalog-content {
+    min-width: 0;
+  }
+
+  .catalog-toolbar {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 0.8rem;
+    margin-bottom: 0.85rem;
+    padding: 0.85rem 0.95rem;
+    border: 1px solid #dce7fb;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
+  }
+
+  .catalog-toolbar h2 {
+    margin: 0;
+    font-size: 1.18rem;
+    color: #142f5f;
+    font-weight: 800;
+  }
+
+  .catalog-toolbar p {
+    margin: 0.12rem 0 0;
+    font-size: 0.86rem;
+    color: #59709a;
+    font-weight: 600;
+  }
+
+  .sort-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .sort-wrap label {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #1d3b73;
+  }
+
+  .sort-wrap select {
+    border: 1px solid #c7d8fb;
+    border-radius: 10px;
+    background: #fff;
+    color: #17356a;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0.42rem 0.62rem;
+  }
+
+  .sort-wrap select:focus {
+    outline: 2px solid rgba(41, 104, 255, 0.2);
+  }
+
+  @media (max-width: 960px) {
+    .course-catalog {
+      grid-template-columns: 1fr;
+      gap: 0.8rem;
+    }
+
+    .filter-panel {
+      position: static;
+      max-height: none;
+    }
+
+    .catalog-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .sort-wrap {
+      justify-content: space-between;
+    }
+
+    .sort-wrap select {
+      width: 100%;
+      max-width: 220px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .catalog-toolbar {
+      padding: 0.72rem 0.72rem;
+    }
+
+    .catalog-toolbar h2 {
+      font-size: 1.05rem;
+    }
   }
 </style>

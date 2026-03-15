@@ -1,8 +1,15 @@
 <script>
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { fetchCourses, deleteCourse, createCourse } from "$lib/js/api";
+  import {
+    fetchCourses,
+    deleteCourse,
+    createCourse,
+    fetchDeletedCoursesAdmin,
+    restoreDeletedCourse,
+  } from "$lib/js/api";
   import { user } from "../../../stores/auth.js";
+  import Breadcrumbs from "$lib/components/Breadcrumbs.svelte";
   import { paginate, LightPaginationNav } from "svelte-paginate";
   import {
     Button,
@@ -29,6 +36,7 @@
     // dựa trên searchQuery
   };
   let courses = [];
+  let deletedCourses = [];
   let isLoading = true;
   let isDeleting = false;
   let currentPage = 1;
@@ -47,8 +55,7 @@
   };
 
   $: publishedCount = courses.filter((course) => course.is_published).length;
-  $: draftCount = courses.length - publishedCount;
-
+  $: unpublishedCount = courses.length - publishedCount;
   // Cập nhật paginatedItems khi filteredCourses thay đổi
   $: paginatedItems = paginate({
     items: filteredCourses,
@@ -57,7 +64,7 @@
   });
 
   onMount(async () => {
-    await loadCourses();
+    await Promise.all([loadCourses(), loadDeletedCourses()]);
   });
 
   const loadCourses = async () => {
@@ -67,6 +74,25 @@
       console.error("Error fetching courses:", error);
     } finally {
       isLoading = false;
+    }
+  };
+
+  const loadDeletedCourses = async () => {
+    try {
+      deletedCourses = await fetchDeletedCoursesAdmin();
+    } catch (error) {
+      console.error("Error fetching deleted courses:", error);
+    }
+  };
+
+  const handleRestoreCourse = async (courseSlug) => {
+    if (confirm("Đây khôi phục khóa học này?")) {
+      try {
+        await restoreDeletedCourse(courseSlug);
+        deletedCourses = deletedCourses.filter((c) => c.slug !== courseSlug);
+      } catch (error) {
+        console.error("Error restoring course:", error);
+      }
     }
   };
 
@@ -124,6 +150,12 @@
 </script>
 
 <section class="admin-shell">
+  <Breadcrumbs
+    items={[
+      { label: "Trang chủ Admin", href: "/admin" },
+      { label: "Quản lý khóa học" },
+    ]}
+  />
   <div class="admin-hero">
     <h1>Quản lý khóa học</h1>
     <p>
@@ -143,11 +175,15 @@
     </article>
     <article class="admin-stat-card">
       <p class="admin-stat-label">Bản nháp</p>
-      <p class="admin-stat-value">{draftCount}</p>
+      <p class="admin-stat-value">{unpublishedCount}</p>
     </article>
     <article class="admin-stat-card">
       <p class="admin-stat-label">Hiển thị mỗi trang</p>
       <p class="admin-stat-value">{pageSize}</p>
+    </article>
+    <article class="admin-stat-card deleted-stat">
+      <p class="admin-stat-label">Đã xóa</p>
+      <p class="admin-stat-value">{deletedCourses.length}</p>
     </article>
   </div>
 
@@ -195,7 +231,20 @@
                 <td>{course.subject}</td>
                 <td>{course.level}</td>
                 <td>{Number(course.price || 0).toLocaleString()} VND</td>
-                <td>{course.is_published ? "Đã xuất bản" : "Chưa xuất bản"}</td>
+                <td>
+                  <div class="course-status-cell">
+                    <span
+                      >{course.is_published
+                        ? "Đã xuất bản"
+                        : "Chưa xuất bản"}</span
+                    >
+                    {#if course.is_published && Number(course.totalStudentsEnrolled || 0) > 0}
+                      <small class="status-sub-note">
+                        Đang có học viên, không thể ngừng bán theo cách về nháp
+                      </small>
+                    {/if}
+                  </div>
+                </td>
                 <td>
                   <div class="admin-page-actions">
                     <Button
@@ -234,6 +283,52 @@
       </div>
     {/if}
   </div>
+
+  {#if deletedCourses.length > 0}
+    <div class="admin-card mt-4">
+      <div class="admin-toolbar">
+        <h2 class="admin-section-title deleted-title">
+          <i class="bi bi-trash3"></i> Khóa học đã xóa ({deletedCourses.length})
+        </h2>
+      </div>
+      <p class="admin-section-desc">
+        Danh sách khóa học bị xóa mềm. Bạn có thể khôi phục để tiếp tục sử dụng.
+      </p>
+      <div class="admin-table-wrap">
+        <Table striped bordered hover responsive>
+          <thead>
+            <tr>
+              <th>STT</th>
+              <th>Tên khóa học</th>
+              <th>Giảng viên</th>
+              <th>Chủ đề</th>
+              <th>Hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each deletedCourses as course, index}
+              <tr>
+                <td>{index + 1}</td>
+                <td>{course.name}</td>
+                <td>{course.teacher?.name || course.teacher || "—"}</td>
+                <td>{course.subject}</td>
+                <td>
+                  <Button
+                    color="success"
+                    outline
+                    size="sm"
+                    on:click={() => handleRestoreCourse(course.slug)}
+                  >
+                    <i class="bi bi-arrow-counterclockwise"></i> Khôi phục
+                  </Button>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </Table>
+      </div>
+    </div>
+  {/if}
 </section>
 
 <!-- Modal tạo khóa học mới -->
@@ -319,5 +414,39 @@
 
   :global(.admin-toolbar .toolbar-search .form-control:focus) {
     box-shadow: none;
+  }
+
+  .deleted-stat :global(.admin-stat-value) {
+    color: #dc2626;
+  }
+
+  .deleted-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #991b1b;
+    margin: 0;
+  }
+
+  .admin-section-desc {
+    font-size: 0.84rem;
+    color: #6b7280;
+    margin: 0 0 0.75rem 0;
+    padding: 0 1rem;
+  }
+
+  .course-status-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .status-sub-note {
+    color: #1d4ed8;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+
+  .mt-4 {
+    margin-top: 1.5rem;
   }
 </style>

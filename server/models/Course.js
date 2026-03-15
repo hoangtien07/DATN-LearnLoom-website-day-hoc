@@ -90,10 +90,14 @@ const courseSchema = new mongoose.Schema(
     published_at: {
       type: Date,
     },
+    is_deleted: {
+      type: Boolean,
+      default: false,
+    },
     sections: [sectionSchema],
     reviews: [{ type: Schema.Types.ObjectId, ref: "Review" }],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 // Create indexes after the schema definition
 // courseSchema.post("init", function () {
