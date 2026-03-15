@@ -7,45 +7,30 @@
   const tabs = [
     { name: "Mục lục", path: "curriculum" },
     { name: "Cài đặt", path: "settings" },
-    // { name: "Thanh toán", path: "payment" },
     { name: "Hỏi đáp", path: "faq" },
   ];
+
+  $: currentPath = $page.url.pathname;
+  const isActiveTab = (tabPath) =>
+    currentPath.includes(`/edit-course/${tabPath}`);
 </script>
 
-<nav class="course-edit-nav mb-4">
-  <!-- <div class="d-flex justify-content-between">
-    <a href="/instructor/dashboard" class="back-button"
-      >Trở về khóa học của tôi</a
-    >
-    <div class="course-name">Khóa học: {courseName}</div>
-  </div> -->
-  <ul class="nav-tabs d-flex">
-    <li style="flex:1">
-      Khóa học: {courseName}
+<nav class="course-edit-nav mb-3" aria-label="Điều hướng chỉnh sửa khóa học">
+  <ul class="course-edit-tabs">
+    <li class="course-edit-title-card">
+      <p class="course-edit-title-label">Khóa học đang chỉnh sửa</p>
+      <p class="course-edit-title-value">{courseName}</p>
     </li>
     {#each tabs as tab}
-      <li class="tabs">
-        <a href={`/course/${slug}/edit-course/${tab.path}`} class="nav-link">
+      <li>
+        <a
+          href={`/course/${slug}/edit-course/${tab.path}`}
+          class={`course-edit-tab-link ${isActiveTab(tab.path) ? "active" : ""}`}
+          aria-current={isActiveTab(tab.path) ? "page" : undefined}
+        >
           {tab.name}
         </a>
       </li>
     {/each}
   </ul>
 </nav>
-
-<style>
-  ul {
-    padding: 0;
-  }
-  li {
-    padding: 4px 0;
-  }
-  .tabs {
-    text-align: center;
-    width: 20%;
-    transition: 0.3s ease;
-  }
-  .tabs:hover {
-    background-color: #ededed;
-  }
-</style>
