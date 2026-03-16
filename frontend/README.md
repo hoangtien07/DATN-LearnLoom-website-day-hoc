@@ -1,38 +1,65 @@
-# create-svelte
+# Frontend LearnLoom (SvelteKit)
 
-Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/main/packages/create-svelte).
+## 1. Mô tả
 
-## Creating a project
+Frontend của LearnLoom được xây dựng bằng SvelteKit.
 
-If you're seeing this, you've probably already done this step. Congrats!
+Chức năng chính:
 
-```bash
-# create a new project in the current directory
-npm create svelte@latest
+- Hiển thị trang khóa học, học tập, hồ sơ, khu vực giảng viên/quản trị.
+- Tích hợp gọi API backend qua Axios.
+- Tích hợp Chat AI (Gemini) thông qua backend.
 
-# create a new project in my-app
-npm create svelte@latest my-app
-```
+## 2. Yêu cầu
 
-## Developing
+- Node.js 18+
+- npm
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## 3. Cài đặt
 
-```bash
+1. Mở terminal tại thư mục frontend.
+2. Chạy lệnh:
+
+npm install
+
+## 4. Biến môi trường
+
+Tạo file .env trong thư mục frontend.
+
+Ví dụ:
+VITE_API_URL=http://localhost:5000
+
+Ghi chú:
+
+- Nếu không cấu hình VITE_API_URL, frontend sẽ fallback về http://localhost:5000.
+
+## 5. Chạy môi trường development
+
 npm run dev
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
+Frontend mặc định chạy tại:
+http://localhost:5173
 
-## Building
+## 6. Build production
 
-To create a production version of your app:
-
-```bash
 npm run build
-```
 
-You can preview the production build with `npm run preview`.
+## 7. Preview bản build
 
-> To deploy your app, you may need to install an [adapter](https://kit.svelte.dev/docs/adapters) for your target environment.
+npm run preview
+
+## 8. Scripts hiện có
+
+- npm run dev: chạy chế độ phát triển.
+- npm run build: build production.
+- npm run preview: chạy thử bản build.
+
+## 9. Kết nối với backend
+
+- Frontend gọi API thông qua file src/lib/js/api.js.
+- Cần backend chạy ổn định và cho phép CORS từ origin frontend.
+
+## 10. Lưu ý khi phát triển
+
+- Cookie/session được gửi kèm API request (withCredentials: true).
+- Khi đổi domain deploy, cần cập nhật URL backend và CORS phía server.
