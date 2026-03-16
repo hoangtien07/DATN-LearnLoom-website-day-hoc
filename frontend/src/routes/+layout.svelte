@@ -78,9 +78,9 @@
     bottom: 100px; /* Điều chỉnh vị trí theo ý muốn */
     left: 20px;
     width: min(92vw, 620px);
-    background-color: white;
-    border: 1px solid #ccc;
-    border-radius: 5px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
     z-index: 1000; /* Đảm bảo hộp thoại nằm trên các element khác */
   }
 
