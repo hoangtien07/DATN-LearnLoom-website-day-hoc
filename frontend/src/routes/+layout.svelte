@@ -77,11 +77,19 @@
     position: fixed;
     bottom: 100px; /* Điều chỉnh vị trí theo ý muốn */
     left: 20px;
-    width: 300px; /* Điều chỉnh kích thước theo ý muốn */
+    width: min(92vw, 620px);
     background-color: white;
     border: 1px solid #ccc;
     border-radius: 5px;
     z-index: 1000; /* Đảm bảo hộp thoại nằm trên các element khác */
+  }
+
+  @media (max-width: 768px) {
+    .chat-box {
+      left: 4vw;
+      bottom: 86px;
+      width: 92vw;
+    }
   }
   /* #close-ai {
     margin-bottom: -20px;

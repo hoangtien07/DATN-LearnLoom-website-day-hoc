@@ -42,6 +42,21 @@ const chatMessageSchema = new Schema(
       type: String,
       default: null,
     },
+    contextMeta: {
+      itemType: {
+        type: String,
+        enum: ["lesson", "assignment", null],
+        default: null,
+      },
+      courseSlug: {
+        type: String,
+        default: null,
+      },
+      itemTitle: {
+        type: String,
+        default: null,
+      },
+    },
   },
   { timestamps: true },
 );

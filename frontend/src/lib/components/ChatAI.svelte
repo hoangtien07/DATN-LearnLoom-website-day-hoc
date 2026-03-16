@@ -50,10 +50,50 @@
 
   const getCurrentContext = () => {
     const params = new URLSearchParams(window.location.search);
+    const path = window.location.pathname || "";
+    const normalizedSegments = path
+      .split("/")
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    const courseIndex = normalizedSegments.indexOf("course");
+    const learnIndex = normalizedSegments.indexOf("learn");
+
+    const courseSlug =
+      courseIndex !== -1 && normalizedSegments[courseIndex + 1]
+        ? decodeURIComponent(normalizedSegments[courseIndex + 1])
+        : null;
+
+    const routeItemType =
+      learnIndex !== -1 && normalizedSegments[learnIndex + 1]
+        ? normalizedSegments[learnIndex + 1]
+        : null;
+
+    const routeItemId =
+      learnIndex !== -1 && normalizedSegments[learnIndex + 2]
+        ? normalizedSegments[learnIndex + 2]
+        : null;
+
+    const itemType = routeItemType === "assignment" ? "assignment" : "lesson";
+    const itemId = routeItemId || null;
+
     return {
       courseId: params.get("courseId") || null,
-      lessonId: params.get("lessonId") || null,
+      lessonId: params.get("lessonId") || itemId,
+      itemType,
+      courseSlug,
+      itemId,
     };
+  };
+
+  const getContextLabel = () => {
+    const context = getCurrentContext();
+    if (!context?.courseSlug || !context?.itemId) {
+      return "AI dang ho tro theo ngu canh chung";
+    }
+
+    const typeLabel = context.itemType === "assignment" ? "bai tap" : "bai hoc";
+    return `AI dang ho tro theo ${typeLabel} hien tai`;
   };
 
   const scrollToBottom = () => {
@@ -119,7 +159,7 @@
     const prompt = $userInput.trim();
     userInput.set("");
     const sessionKey = getSessionKey();
-    const { courseId, lessonId } = getCurrentContext();
+    const { courseId, lessonId, itemType, courseSlug } = getCurrentContext();
 
     messages = [...messages, { role: "user", content: prompt }];
     const userMessageIndex = messages.length - 1;
@@ -147,6 +187,8 @@
           sessionKey,
           courseId,
           lessonId,
+          itemType,
+          courseSlug,
         }),
       });
 
@@ -319,7 +361,10 @@
 
 <div class="chat-container">
   <div class="chat-header">
-    <h2>Chat với AI Gemini</h2>
+    <div class="chat-header-title">
+      <h2>Chat voi AI Gemini</h2>
+      <p>{getContextLabel()}</p>
+    </div>
 
     <button on:click={handleClearChat} style="background-color:transparent;">
       <Button size="sm" outline color="danger"
@@ -393,6 +438,12 @@
     align-items: center;
     border-bottom: 1px solid #aaa;
     padding: 4px 12px;
+  }
+
+  .chat-header-title p {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: #6b7280;
   }
 
   .bi-trash3-fill {
