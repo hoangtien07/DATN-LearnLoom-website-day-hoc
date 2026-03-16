@@ -75,3 +75,99 @@ Sau khi chạy:
 - Route OAuth trong backend hiện redirect về http://localhost:5173. Khi deploy cần đổi sang domain thực tế.
 - CORS backend hỗ trợ cấu hình qua CLIENT_ORIGINS.
 - Chat AI yêu cầu GEMINI_API_KEY, nếu thiếu thì endpoint chat sẽ lỗi 500.
+
+
+## 4.1. Hướng dẫn cài đặt từ đầu
+
+### Bước 1: Clone mã nguồn
+
+```bash
+git clone https://github.com/<your-org-or-username>/LearnLoom-website-day-hoc.git
+cd LearnLoom-website-day-hoc
+```
+
+### Bước 2: Tạo file môi trường
+
+Tạo file `.env` cho từng phần dựa trên `.env.example`:
+
+- Frontend: copy `frontend/.env.example` thành `frontend/.env`.
+- Backend: copy `server/.env.example` thành `server/.env`.
+
+Điền các giá trị thật cho Google OAuth, Gemini API, MongoDB nếu deploy production.
+
+### Bước 3: Cài đặt dependencies
+
+```bash
+cd frontend && npm install
+cd ../server && npm install
+```
+
+### Bước 4: Khởi động hệ thống
+
+Mở 2 terminal:
+
+- Terminal 1 (Backend):
+  ```bash
+  cd server
+  npm run start
+  ```
+- Terminal 2 (Frontend):
+  ```bash
+  cd frontend
+  npm run dev
+  ```
+
+Sau khi chạy:
+
+- Frontend: http://localhost:5173
+- Backend: http://localhost:5000
+
+### Bước 5: Kiểm tra các nghiệp vụ chính
+
+- Đăng nhập Google OAuth (nếu đã cấu hình).
+- Quản lý khóa học, bài học, đơn hàng, bình luận, đánh giá.
+- Chat AI theo ngữ cảnh (nếu đã cấu hình GEMINI_API_KEY).
+- Thanh toán đơn hàng qua VNPAY (test).
+
+## 9. Hướng dẫn tích hợp và test thanh toán VNPAY
+
+Hệ thống đã tích hợp demo thanh toán VNPAY ở môi trường Sandbox. Khi test, chỉ dùng thông tin thẻ test dưới đây (không dùng cho khách hàng thật).
+
+**Thông tin thẻ test:**
+
+| Ngân hàng | Số thẻ           | Tên chủ thẻ | Ngày phát hành | Mã OTP |
+| --------- | ---------------- | ----------- | -------------- | ------ |
+| NCB       | 9704198526194129 | NGUYEN VINA | 07/19          | 123456 |
+
+**URL thanh toán test:**
+
+- https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+
+**Tài liệu và code mẫu:**
+
+- Tài liệu: https://sandbox.vnpayment.vn/apis/docs/thanh-toan-quay.html
+- Code demo: https://sandbox.vnpayment.vn/apis/node-demo/node-demo-tich-hop
+
+**Lưu ý:**
+
+- Khi test, chỉ dùng thẻ test và URL sandbox, không dùng cho giao dịch thật.
+- Để tích hợp production, cần đăng ký Merchant và lấy thông tin thật từ VNPAY.
+
+## 10. Hướng dẫn tích hợp Chat AI Gemini
+
+Hệ thống đã tích hợp chat AI Gemini (Google Generative AI) theo ngữ cảnh khóa học/bài học.
+
+- Để sử dụng, cần điền GEMINI_API_KEY vào file `server/.env`.
+- Model mặc định: gemini-2.0-flash (có thể đổi qua biến môi trường).
+- Chat AI sẽ hoạt động realtime, stream từng chunk về frontend.
+
+**Lưu ý:**
+
+- Nếu thiếu GEMINI_API_KEY, endpoint chat sẽ trả lỗi 500.
+- Chỉ dùng key thật cho môi trường production.
+
+## 11. Tham khảo chi tiết từng phần
+
+- Hướng dẫn Frontend: [frontend/README.md](frontend/README.md)
+- Hướng dẫn Backend: [server/README.md](server/README.md)
+
