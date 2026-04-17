@@ -1,19 +1,18 @@
 <script>
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { fetchUser, user } from "../../stores/auth";
 
-  onMount(() => {
-    fetchUser();
+  // Placeholder — instructor vào dashboard, user khác về /.
+  // Note: hệ thống dùng role "instructor" (không phải "teacher") nên giữ redirect theo role thật.
+  onMount(async () => {
+    if (!$user) await fetchUser();
+    if ($user?.role === "instructor") {
+      goto("/instructor/dashboard", { replaceState: true });
+    } else {
+      goto("/", { replaceState: true });
+    }
   });
-
-  $: teacher = $user;
-  $: isTeacher = $user && $user.role === "teacher";
 </script>
 
-{#if isTeacher}
-  <h2>Chào {teacher.username}!</h2>
-  <h1>Teacher Dashboard</h1>
-  <a href="/profile">Profile</a>
-{:else}
-  <h2>You do not have permission to access this page.</h2>
-{/if}
+<p>Đang chuyển hướng…</p>

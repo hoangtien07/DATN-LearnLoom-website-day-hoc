@@ -573,36 +573,30 @@ export const getUserAssignmentStatus = async (userId, assignmentId) => {
   }
 };
 
-// Nộp bài
-export const submitQuiz = async (assignmentId, userId, answers) => {
-  try {
-    console.log(assignmentId, answers);
-    // Format answers correctly before sending
-    const formattedAnswers = Object.entries(answers).map(
-      ([questionId, selectedOptions]) => ({
-        questionId,
-        selectedOptions: selectedOptions.map((optionText) => ({
-          userAnswer: optionText, // Text của câu trả lời
-          isCorrect: false, // Backend sẽ xử lý xem câu trả lời có đúng hay không
-        })),
-      }),
-    );
+// BR-12: gọi trước khi làm bài — BE ghi startedAt + trả câu hỏi đã strip isCorrect.
+export const startQuiz = async (assignmentId) => {
+  const response = await apiClient.post(
+    `/api/courses/assignments/${assignmentId}/start`,
+  );
+  return response.data;
+};
 
-    console.log("forrmat: ", formattedAnswers);
+// Nộp bài. BE giờ tự lấy userId từ session (isAuthenticated).
+export const submitQuiz = async (assignmentId, answers) => {
+  const formattedAnswers = Object.entries(answers).map(
+    ([questionId, selectedOptions]) => ({
+      questionId,
+      selectedOptions: selectedOptions.map((optionText) => ({
+        userAnswer: optionText,
+      })),
+    }),
+  );
 
-    const response = await apiClient.post(
-      `/api/courses/assignments/${assignmentId}/submit`,
-      {
-        userId,
-        answers: formattedAnswers,
-      },
-    );
-
-    return response.data;
-  } catch (error) {
-    console.error("Lỗi khi gửi bài tập:", error);
-    throw error;
-  }
+  const response = await apiClient.post(
+    `/api/courses/assignments/${assignmentId}/submit`,
+    { answers: formattedAnswers },
+  );
+  return response.data;
 };
 
 // Lấy dữ liệu từ bài tập đã hoàn thành
