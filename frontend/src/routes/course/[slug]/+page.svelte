@@ -331,7 +331,7 @@
   // Handle "Continue Learning" button click
   const handleContinueLearning = () => {
     const nextItem = getNextUncompletedItem();
-    console.log(nextItem);
+    if (!nextItem) return;
     const url = `/course/${course.slug}/learn/${nextItem.itemType}/${nextItem.itemId}`;
     goto(url);
   };
