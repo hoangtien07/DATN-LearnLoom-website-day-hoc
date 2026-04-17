@@ -2,39 +2,50 @@
   import { onMount } from "svelte";
   import { getItem } from "$lib/js/api";
   import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
 
   let lessonId;
+  let slug;
   let lesson = null;
   let isLoading = true;
+  let accessError = null; // { kind: 'unauth' | 'not_enrolled' | 'not_found' | 'other', message }
 
   $: lessonId = $page.params.lessonId;
-  // Khi lessonId thay đổi, gọi lại API để tải bài học mới
+  $: slug = $page.params.slug;
+
   $: if (lessonId) {
     loadLesson(lessonId);
   }
 
-  onMount(async () => {
-    try {
-      isLoading = true;
-      lesson = await getItem("lesson", lessonId);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    } finally {
-      isLoading = false;
-    }
-  });
+  const extractError = (error) => {
+    const status = error?.response?.status;
+    const code = error?.response?.data?.code;
+    const message =
+      error?.response?.data?.message || error?.message || "Lỗi không xác định";
+    if (status === 401) return { kind: "unauth", message };
+    if (status === 403 && code === "NOT_ENROLLED")
+      return { kind: "not_enrolled", message };
+    if (status === 404) return { kind: "not_found", message };
+    return { kind: "other", message };
+  };
 
-  // Hàm tải bài học dựa trên lessonId
-  const loadLesson = async (lessonId) => {
+  const loadLesson = async (id) => {
     try {
       isLoading = true;
-      lesson = await getItem("lesson", lessonId);
+      accessError = null;
+      lesson = await getItem("lesson", id);
     } catch (error) {
       console.error("Error fetching lesson data:", error);
+      lesson = null;
+      accessError = extractError(error);
     } finally {
       isLoading = false;
     }
   };
+
+  onMount(() => {
+    if (lessonId) loadLesson(lessonId);
+  });
 
   // Hàm lấy id của video Youtube
   function getYoutubeVideoId(url) {
@@ -46,6 +57,29 @@
 
 {#if isLoading}
   <div class="lesson-state"><p>Đang tải bài học...</p></div>
+{:else if accessError?.kind === "unauth"}
+  <div class="lesson-state access-block">
+    <h3>Bạn cần đăng nhập</h3>
+    <p>Vui lòng đăng nhập để tiếp tục học bài này.</p>
+    <button
+      class="access-btn"
+      on:click={() =>
+        goto(`/login?redirectTo=/course/${slug}/learn/lesson/${lessonId}`)}
+      >Đăng nhập</button
+    >
+  </div>
+{:else if accessError?.kind === "not_enrolled"}
+  <div class="lesson-state access-block">
+    <h3>Nội dung yêu cầu đăng ký khóa học</h3>
+    <p>Hãy đăng ký khóa học để mở toàn bộ bài giảng và bài tập.</p>
+    <button class="access-btn" on:click={() => goto(`/course/${slug}`)}
+      >Đăng ký khóa học</button
+    >
+  </div>
+{:else if accessError?.kind === "not_found"}
+  <div class="lesson-state"><p>Không tìm thấy bài học.</p></div>
+{:else if accessError}
+  <div class="lesson-state"><p>Lỗi: {accessError.message}</p></div>
 {:else if lesson}
   <div class="lesson-content">
     {#if lesson.type === "TextLesson"}
@@ -97,6 +131,28 @@
   .lesson-empty {
     color: var(--learn-text-muted);
     font-size: 0.95rem;
+  }
+  .access-block {
+    padding: 2rem;
+    border: 1px solid var(--learn-border, #e5e7eb);
+    border-radius: 10px;
+    background: var(--learn-surface, #fafafa);
+    max-width: 520px;
+  }
+  .access-block h3 {
+    margin: 0 0 0.5rem;
+  }
+  .access-btn {
+    margin-top: 1rem;
+    padding: 0.6rem 1.2rem;
+    background: #2563eb;
+    color: white;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .access-btn:hover {
+    background: #1d4ed8;
   }
 
   .lesson-content {

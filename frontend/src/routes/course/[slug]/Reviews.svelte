@@ -10,6 +10,8 @@
   export let isEnrolled;
   export let user;
   export let reviews;
+  export let userProgress = 0; // BR-10: tiến độ học của user, cần ≥ MIN_PROGRESS để review
+  export const MIN_PROGRESS = 50;
 
   // Khai báo biến
   const dispatch = createEventDispatcher();
@@ -91,6 +93,21 @@
       newReview = { rating: 0, comment: "" };
       await dispatch("reviewSubmitted");
     } catch (error) {
+      const code = error?.response?.data?.code;
+      const existingId = error?.response?.data?.existingReviewId;
+      if (code === "REVIEW_ALREADY_EXISTS" && existingId) {
+        // Chuyển sang chế độ update ngay lập tức.
+        const existing = reviews.find((r) => r._id === existingId);
+        handleEditReview(existing || { _id: existingId, ...newReview });
+        alert("Bạn đã đánh giá khóa học này — vui lòng cập nhật đánh giá cũ.");
+      } else if (code === "PROGRESS_INSUFFICIENT") {
+        const { currentProgress, minProgress } = error.response.data;
+        alert(
+          `Cần hoàn thành tối thiểu ${minProgress}% khóa học mới được đánh giá. Tiến độ hiện tại: ${currentProgress}%.`,
+        );
+      } else {
+        alert(error?.response?.data?.message || "Không gửi được đánh giá");
+      }
       console.error("Error creating review:", error);
     }
   };
@@ -194,7 +211,7 @@
 
     <div class="review-column">
       {#if user}
-        {#if isEnrolled}
+        {#if isEnrolled && userProgress >= MIN_PROGRESS}
           {#if isEdited || !userReview}
             <div class="write-review">
               <h3>
@@ -308,12 +325,23 @@
               </div>
             </div>
           {/if}
-        {:else if user.enrolledCourses.completedItems}
-          {#if user.enrolledCourses.completedItems.length < 3}
-            <p>Bạn cần hoàn thành ít nhất 2 bài học để viết đánh giá</p>
-          {/if}
+        {:else if isEnrolled}
+          <div class="review-gate">
+            <p>
+              Cần hoàn thành tối thiểu <strong>{MIN_PROGRESS}%</strong> khóa học
+              để được viết đánh giá.
+            </p>
+            <div class="progress-inline">
+              <Progress value={userProgress} color="info" />
+              <span class="progress-label"
+                >Tiến độ hiện tại: <strong>{userProgress}%</strong></span
+              >
+            </div>
+          </div>
         {:else}
-          <p>Bạn không thể đánh giá khóa học này vì chưa đăng ký.</p>
+          <p class="review-gate">
+            Bạn cần đăng ký và học khóa học này mới có thể đánh giá.
+          </p>
         {/if}
       {/if}
 
@@ -385,6 +413,31 @@
     border-radius: 16px;
     padding: 1rem;
     box-shadow: 0 8px 24px rgba(15, 40, 90, 0.08);
+  }
+
+  .review-gate {
+    background: #f1f5f9;
+    border: 1px dashed #94a3b8;
+    padding: 1rem;
+    border-radius: 10px;
+    color: #334155;
+    font-size: 0.92rem;
+  }
+  .review-gate p {
+    margin: 0 0 0.5rem;
+  }
+  .progress-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .progress-inline :global(.progress) {
+    flex: 1;
+  }
+  .progress-label {
+    white-space: nowrap;
+    font-size: 0.85rem;
+    color: #475569;
   }
 
   h2 {

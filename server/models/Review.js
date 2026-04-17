@@ -13,5 +13,8 @@ const reviewSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Mỗi user chỉ có một review cho một khóa học (BR-11).
+reviewSchema.index({ userId: 1, courseId: 1 }, { unique: true });
+
 const Review = mongoose.model("Review", reviewSchema);
 export default Review;

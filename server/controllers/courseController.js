@@ -10,6 +10,12 @@ import {
 import Assignment from "../models/Assignments.js";
 import { AssignmentResult } from "../models/Assignments.js";
 import User from "../models/User.js";
+import logger from "../utils/logger.js";
+import { recordAudit } from "../utils/audit.js";
+import {
+  resolveCourseAccess,
+  sanitizeCourseForViewer,
+} from "../utils/courseAccess.js";
 
 const normalizeTotalDuration = (value) => {
   if (value === undefined || value === null || value === "") {
@@ -54,12 +60,17 @@ export const createCourse = async (req, res) => {
     } = req.body;
 
     const normalizedTotalDuration = normalizeTotalDuration(totalDuration);
-    if (
-      normalizedTotalDuration === null ||
-      Number.isNaN(normalizedTotalDuration)
-    ) {
+    // Chỉ báo lỗi khi người dùng có nhập totalDuration nhưng giá trị không hợp lệ.
+    // Khi tạo bản nháp (chưa có bài học) cho phép để trống.
+    if (Number.isNaN(normalizedTotalDuration)) {
       return res.status(400).json({
         message: "totalDuration phải là số giờ lớn hơn 0",
+      });
+    }
+
+    if (is_published === true && normalizedTotalDuration === null) {
+      return res.status(400).json({
+        message: "Cần nhập totalDuration khi xuất bản khóa học",
       });
     }
 
@@ -69,7 +80,18 @@ export const createCourse = async (req, res) => {
       return res.status(400).json({ message: "Teacher not found" });
     }
 
-    const course = new Course({
+    // Kiểm tra slug trùng để trả lỗi rõ ràng thay vì 500 duplicate key
+    if (slug) {
+      const slugTaken = await Course.findOne({ slug }).select("_id");
+      if (slugTaken) {
+        return res.status(409).json({
+          code: "COURSE_SLUG_TAKEN",
+          message: "Slug đã được sử dụng, vui lòng chọn slug khác",
+        });
+      }
+    }
+
+    const coursePayload = {
       name,
       summary,
       description,
@@ -78,19 +100,24 @@ export const createCourse = async (req, res) => {
       level,
       subject,
       totalLessons,
-      totalDuration: normalizedTotalDuration,
       slug,
       totalStudentsEnrolled,
       visible,
       image_url,
       price,
       old_price,
-      is_published,
+      is_published: is_published ?? false,
       is_selling,
       published_at,
       sections,
       reviews,
-    });
+    };
+
+    if (normalizedTotalDuration !== null) {
+      coursePayload.totalDuration = normalizedTotalDuration;
+    }
+
+    const course = new Course(coursePayload);
 
     await course.save();
     res.status(201).json(course);
@@ -177,6 +204,14 @@ export const softDeleteCourse = async (req, res) => {
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
+    recordAudit({
+      actorId: req.user?._id,
+      actorRole: req.user?.role,
+      action: "course.soft_delete",
+      targetType: "Course",
+      targetId: course._id,
+      metadata: { slug: course.slug },
+    });
     res.json({ message: "Course soft deleted" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -225,24 +260,213 @@ export const unhideCourse = async (req, res) => {
   }
 };
 
-// Xuất bản khóa học
+// BR-20: "Publish" được tái định nghĩa theo 2 con đường:
+//   - Instructor gọi publish → nếu đã từng được admin approved thì xuất bản luôn;
+//     nếu chưa, chuyển reviewStatus = "pending" và chờ admin duyệt.
+//   - Admin gọi publish → xuất bản trực tiếp (admin override).
 export const publishCourse = async (req, res) => {
   try {
     const filter = { slug: req.params.slug, is_deleted: { $ne: true } };
     if (req.user && req.user.role === "instructor") {
       filter.teacher = req.user._id;
     }
-    const course = await Course.findOneAndUpdate(
-      filter,
-      { is_published: true, published_at: new Date() },
-      { new: true },
-    );
+
+    const course = await Course.findOne(filter);
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
-    res.json({ message: "Course published", course });
+
+    const isAdmin = req.user?.role === "admin";
+
+    if (isAdmin) {
+      course.is_published = true;
+      course.published_at = new Date();
+      course.reviewStatus = "approved";
+      course.reviewedBy = req.user._id;
+      course.reviewedAt = new Date();
+      course.reviewRejectionReason = undefined;
+      await course.save();
+
+      recordAudit({
+        actorId: req.user._id,
+        actorRole: req.user.role,
+        action: "course.publish_admin",
+        targetType: "Course",
+        targetId: course._id,
+        metadata: { slug: course.slug },
+      });
+      return res.json({ message: "Course published by admin", course });
+    }
+
+    // Instructor flow
+    // Đã được admin approve trước đó → publish luôn (tức bật lại).
+    if (course.reviewStatus === "approved") {
+      course.is_published = true;
+      course.published_at = course.published_at || new Date();
+      await course.save();
+      recordAudit({
+        actorId: req.user._id,
+        actorRole: req.user.role,
+        action: "course.publish",
+        targetType: "Course",
+        targetId: course._id,
+        metadata: { slug: course.slug },
+      });
+      return res.json({ message: "Course published", course });
+    }
+
+    if (course.reviewStatus === "pending") {
+      return res.status(409).json({
+        code: "REVIEW_PENDING",
+        message: "Khóa học đang chờ admin duyệt",
+      });
+    }
+
+    // "none" hoặc "rejected" → submit review.
+    course.reviewStatus = "pending";
+    course.reviewSubmittedAt = new Date();
+    course.reviewRejectionReason = undefined;
+    // Chưa public cho học viên.
+    course.is_published = false;
+    await course.save();
+
+    recordAudit({
+      actorId: req.user._id,
+      actorRole: req.user.role,
+      action: "course.submit_review",
+      targetType: "Course",
+      targetId: course._id,
+      metadata: { slug: course.slug },
+    });
+
+    return res.json({
+      message: "Đã gửi yêu cầu duyệt, khóa học sẽ được xuất bản sau khi admin chấp nhận",
+      course,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+// BR-20: Admin xem danh sách course đang chờ duyệt.
+export const getCoursesPendingReview = async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 20, 1),
+      100,
+    );
+    const skip = (page - 1) * limit;
+
+    const filter = {
+      reviewStatus: "pending",
+      is_deleted: { $ne: true },
+    };
+
+    const [courses, total] = await Promise.all([
+      Course.find(filter)
+        .sort({ reviewSubmittedAt: 1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("teacher", "username email thumbnail"),
+      Course.countDocuments(filter),
+    ]);
+
+    res.json({
+      data: courses,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    logger.error({ err: error }, "Error listing pending courses");
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// BR-20: Admin duyệt khóa học → approved + is_published.
+export const approveCourseReview = async (req, res) => {
+  try {
+    const course = await Course.findOne({
+      slug: req.params.slug,
+      is_deleted: { $ne: true },
+    });
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    if (course.reviewStatus !== "pending") {
+      return res.status(409).json({
+        code: "NOT_PENDING",
+        message: "Khóa học không ở trạng thái chờ duyệt",
+      });
+    }
+
+    course.reviewStatus = "approved";
+    course.reviewedBy = req.user._id;
+    course.reviewedAt = new Date();
+    course.reviewRejectionReason = undefined;
+    course.is_published = true;
+    course.published_at = course.published_at || new Date();
+    await course.save();
+
+    recordAudit({
+      actorId: req.user._id,
+      actorRole: req.user.role,
+      action: "course.review_approve",
+      targetType: "Course",
+      targetId: course._id,
+      metadata: { slug: course.slug },
+    });
+
+    res.json({ message: "Course approved & published", course });
+  } catch (error) {
+    logger.error({ err: error }, "Error approving course review");
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// BR-20: Admin từ chối khóa học.
+export const rejectCourseReview = async (req, res) => {
+  try {
+    const { rejectionReason } = req.validatedBody || req.body;
+
+    const course = await Course.findOne({
+      slug: req.params.slug,
+      is_deleted: { $ne: true },
+    });
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    if (course.reviewStatus !== "pending") {
+      return res.status(409).json({
+        code: "NOT_PENDING",
+        message: "Khóa học không ở trạng thái chờ duyệt",
+      });
+    }
+
+    course.reviewStatus = "rejected";
+    course.reviewedBy = req.user._id;
+    course.reviewedAt = new Date();
+    course.reviewRejectionReason = rejectionReason;
+    course.is_published = false;
+    await course.save();
+
+    recordAudit({
+      actorId: req.user._id,
+      actorRole: req.user.role,
+      action: "course.review_reject",
+      targetType: "Course",
+      targetId: course._id,
+      metadata: { slug: course.slug },
+    });
+
+    res.json({ message: "Course review rejected", course });
+  } catch (error) {
+    logger.error({ err: error }, "Error rejecting course review");
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -321,6 +545,14 @@ export const restoreDeletedCourse = async (req, res) => {
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
+    recordAudit({
+      actorId: req.user?._id,
+      actorRole: req.user?.role,
+      action: "course.restore",
+      targetType: "Course",
+      targetId: course._id,
+      metadata: { slug: course.slug },
+    });
     res.json({ message: "Course restored", course });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -356,6 +588,14 @@ export const deleteCourse = async (req, res) => {
     if (!deletedCourse) {
       return res.status(404).json({ message: "Course not found" });
     }
+    recordAudit({
+      actorId: req.user?._id,
+      actorRole: req.user?.role,
+      action: "course.hard_delete",
+      targetType: "Course",
+      targetId: deletedCourse._id,
+      metadata: { slug: deletedCourse.slug },
+    });
     res.json({ message: "Course deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -367,6 +607,7 @@ export const deleteCourse = async (req, res) => {
 // ------------------------------------
 
 // Get course by slug
+// Sanitize content của lesson/assignment khi user chưa có quyền xem (guest, chưa enroll).
 export const getCourseBySlug = async (req, res) => {
   try {
     const course = await Course.findOne({ slug: req.params.slug }).populate([
@@ -384,7 +625,14 @@ export const getCourseBySlug = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    res.json(course);
+    const access = await resolveCourseAccess(course, req.user || null);
+    const payload = sanitizeCourseForViewer(course, access);
+    payload.viewerAccess = {
+      canAccessFullContent: access.canAccessFullContent,
+      isEnrolled: access.isEnrolled,
+    };
+
+    res.json(payload);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -407,12 +655,18 @@ export const getCourseByInstructor = async (req, res) => {
   }
 };
 
-// Get all courses (with optional filters)
+// Get all courses (with optional filters + pagination)
 export const getCourses = async (req, res) => {
   try {
     const { subjects, levels, durations, prices } = req.query;
 
-    // Build the filter object
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 20, 1),
+      100,
+    );
+    const skip = (page - 1) * limit;
+
     const filters = {
       visible: true,
       is_published: true,
@@ -456,8 +710,24 @@ export const getCourses = async (req, res) => {
       filters.$and = andConditions;
     }
 
-    const courses = await Course.find(filters).populate("teacher");
-    res.json(courses);
+    const [courses, total] = await Promise.all([
+      Course.find(filters)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("teacher", "username thumbnail"),
+      Course.countDocuments(filters),
+    ]);
+
+    res.json({
+      data: courses,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -487,20 +757,22 @@ export const addSection = async (req, res) => {
   }
 };
 
-// Get all sections
+// Get all sections — sanitize giống getCourseBySlug.
 export const getSectionsByCourseSlug = async (req, res) => {
   try {
     const { slug } = req.params;
 
-    const course = await Course.findOne({ slug }).populate(
-      "sections.items.itemId",
-    );
+    const course = await Course.findOne({ slug })
+      .populate("teacher", "_id")
+      .populate("sections.items.itemId");
 
     if (!course) {
       return res.status(404).json({ message: "Section not found" });
     }
 
-    res.json(course.sections);
+    const access = await resolveCourseAccess(course, req.user || null);
+    const payload = sanitizeCourseForViewer(course, access);
+    res.json(payload.sections);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -571,7 +843,6 @@ const moveArrayItem = (arr, fromIndex, toIndex) => {
 
 // Sắp xếp lại thứ tự các section
 export const reorderSections = async (req, res) => {
-  console.log(req.body);
   try {
     const { slug } = req.params;
     const { startIndex, endIndex } = req.body;
@@ -655,8 +926,6 @@ export const addItemToSection = async (req, res) => {
     const { slug, sectionId } = req.params;
     const { itemType, ...itemData } = req.body;
 
-    console.log(itemData, itemType);
-
     const course = await Course.findOne({ slug });
     if (!course) return res.status(404).json({ message: "Course not found" });
 
@@ -691,14 +960,11 @@ export const addItemToSection = async (req, res) => {
       return res.status(400).json({ message: "Invalid item type" });
     }
 
-    console.log(newItem._id);
-
     section.items.push({
       itemType,
       itemId: newItem._id,
       order: section.items.length,
     });
-    console.log(section.items);
 
     await course.save();
     res.status(201).json(newItem);
@@ -752,7 +1018,7 @@ export const getItem = async (req, res) => {
 
     res.json(item);
   } catch (error) {
-    console.error("Lỗi khi lấy item:", error);
+    logger.error({ err: error }, "Lỗi khi lấy item");
     res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -761,10 +1027,9 @@ export const getItem = async (req, res) => {
 export const updateItem = async (req, res) => {
   try {
     const { itemType, itemId } = req.params;
-    const updatedItemData = req.body; // Lấy dữ liệu cập nhật từ request body
+    const updatedItemData = req.body;
 
     let updatedItem;
-    console.log(updatedItemData);
 
     if (itemType === "lesson") {
       // Tìm lesson để lấy type hiện tại
@@ -824,7 +1089,7 @@ export const updateItem = async (req, res) => {
     }
     res.json(updatedItem);
   } catch (error) {
-    console.error("Lỗi khi cập nhật item:", error);
+    logger.error({ err: error }, "Lỗi khi cập nhật item");
     res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -877,7 +1142,7 @@ export const reorderItemsInSection = async (req, res) => {
     const section = course.sections.id(sectionId);
     if (!section) return res.status(404).json({ message: "Section not found" });
 
-    course.sections.items = moveArrayItem(section.items, startIndex, endIndex);
+    section.items = moveArrayItem(section.items, startIndex, endIndex);
 
     await course.save();
 
@@ -956,113 +1221,258 @@ export const updateCourseProgress = async (req, res) => {
       (total, section) => total + section.items.length,
       0,
     );
-    enrollment.progress = Math.round(
-      (enrollment.completedItems.length / totalItems) * 100,
-    );
+    enrollment.progress =
+      totalItems > 0
+        ? Math.round((enrollment.completedItems.length / totalItems) * 100)
+        : 0;
     enrollment.lastAccessed = new Date();
 
     await user.save();
 
     res.json({ message: "Progress updated", progress: enrollment.progress });
   } catch (error) {
-    console.error("Error updating progress:", error);
+    logger.error({ err: error }, "Error updating progress");
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// Hàm nộp bài kiểm tra
-export const submitQuiz = async (req, res) => {
+// Strip `isCorrect` và field nhạy cảm khỏi câu hỏi khi phát cho học sinh đang làm bài (BR-14).
+const sanitizeQuestionsForQuiz = (questions = []) =>
+  questions.map((q) => ({
+    _id: q._id,
+    questionText: q.questionText,
+    options: (q.options || []).map((opt) => ({
+      _id: opt._id,
+      text: opt.text,
+    })),
+  }));
+
+// BR-12: học sinh bắt đầu làm bài — tạo (hoặc reuse) AssignmentResult và ghi startedAt.
+// Server sẽ dùng startedAt + assignment.timer để enforce thời gian khi submit.
+export const startQuiz = async (req, res) => {
   try {
     const { assignmentId } = req.params;
-    const { userId, answers } = req.body;
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const assignment = await Assignment.findById(assignmentId);
     if (!assignment) {
       return res.status(404).json({ message: "Không tìm thấy bài tập" });
     }
 
-    // Tìm kết quả bài làm hiện tại của học sinh
-    let assignmentResult = await AssignmentResult.findOne({
+    let result = await AssignmentResult.findOne({
       assignment: assignmentId,
       student: userId,
     });
 
-    // Tính điểm và tạo kết quả chi tiết
+    const maxAttempts = Number(assignment.maxAttempts) || 0; // 0 = không giới hạn
+    const timerMinutes = Number(assignment.timer) || 0;
+
+    if (result) {
+      if (result.isFinal) {
+        return res.status(409).json({
+          code: "ASSIGNMENT_COMPLETED",
+          message: "Bạn đã hoàn tất bài này và không thể làm lại",
+        });
+      }
+      if (!assignment.allowRetake && result.attempts > 0) {
+        return res.status(409).json({
+          code: "RETAKE_NOT_ALLOWED",
+          message: "Bài này không cho phép làm lại",
+        });
+      }
+      if (
+        assignment.allowRetake &&
+        maxAttempts > 0 &&
+        result.attempts >= maxAttempts
+      ) {
+        return res.status(409).json({
+          code: "MAX_ATTEMPTS_REACHED",
+          message: "Bạn đã dùng hết số lần làm bài",
+        });
+      }
+      // Nếu đã có startedAt mà chưa quá hạn → reuse (cho phép tải lại trang).
+      if (
+        timerMinutes > 0 &&
+        result.startedAt &&
+        Date.now() - new Date(result.startedAt).getTime() <
+          timerMinutes * 60 * 1000
+      ) {
+        // giữ nguyên startedAt
+      } else {
+        result.startedAt = new Date();
+      }
+    } else {
+      result = new AssignmentResult({
+        assignment: assignmentId,
+        student: userId,
+        startedAt: new Date(),
+        attempts: 0,
+      });
+    }
+
+    await result.save();
+
+    const deadline =
+      timerMinutes > 0
+        ? new Date(
+            new Date(result.startedAt).getTime() + timerMinutes * 60 * 1000,
+          )
+        : null;
+
+    res.json({
+      assignmentId,
+      startedAt: result.startedAt,
+      deadline,
+      timerMinutes,
+      attempt: result.attempts + 1,
+      maxAttempts,
+      questions: sanitizeQuestionsForQuiz(assignment.questions),
+    });
+  } catch (error) {
+    logger.error({ err: error }, "Error starting quiz");
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// Hàm nộp bài kiểm tra (BR-12 + BR-14)
+export const submitQuiz = async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const userIdFromAuth = req.user?._id;
+    const { answers } = req.body;
+
+    if (!userIdFromAuth) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const userId = userIdFromAuth;
+
+    const assignment = await Assignment.findById(assignmentId);
+    if (!assignment) {
+      return res.status(404).json({ message: "Không tìm thấy bài tập" });
+    }
+
+    let result = await AssignmentResult.findOne({
+      assignment: assignmentId,
+      student: userId,
+    });
+
+    if (!result || !result.startedAt) {
+      return res.status(400).json({
+        code: "NOT_STARTED",
+        message: "Bạn chưa bắt đầu làm bài. Hãy nhấn 'Bắt đầu' trước khi nộp.",
+      });
+    }
+    if (result.isFinal) {
+      return res.status(409).json({
+        code: "ASSIGNMENT_COMPLETED",
+        message: "Bài đã hoàn tất, không được nộp lại.",
+      });
+    }
+
+    const maxAttempts = Number(assignment.maxAttempts) || 0;
+    const timerMinutes = Number(assignment.timer) || 0;
+
+    // BR-12: Enforce timer. Cho phép 10 giây lệch network.
+    if (timerMinutes > 0) {
+      const elapsedMs = Date.now() - new Date(result.startedAt).getTime();
+      const limitMs = timerMinutes * 60 * 1000 + 10_000;
+      if (elapsedMs > limitMs) {
+        // Vẫn chấm nhưng đánh dấu "expired" và không tính thêm attempt retake.
+        result.isFinal = true;
+        result.submittedAt = new Date();
+        await result.save();
+        return res.status(408).json({
+          code: "TIMER_EXPIRED",
+          message: "Đã quá thời gian làm bài. Bài không được ghi nhận.",
+        });
+      }
+    }
+
+    // Chấm điểm.
     let score = 0;
     const resultDetails = assignment.questions.map((question) => {
-      // Tìm câu trả lời của người dùng trong mảng answers
-      const userAnswerObject = answers.find(
-        (answer) => answer.questionId === question._id.toString(),
+      const userAnswerObject = (answers || []).find(
+        (a) => a.questionId === question._id.toString(),
       );
-
-      // Lấy các đáp án học sinh đã chọn từ userAnswerObject, nếu không tìm thấy thì trả về mảng rỗng
       const userAnswer = userAnswerObject
-        ? userAnswerObject.selectedOptions.map((e) => e.userAnswer)
+        ? (userAnswerObject.selectedOptions || []).map((e) => e.userAnswer)
         : [];
-
-      // Lấy các đáp án đúng trong csdl
       const correctOptions = question.options
-        .filter((option) => option.isCorrect)
-        .map((option) => option.text);
-
-      // Kiểm tra đáp án của học sinh đúng hay sai
+        .filter((o) => o.isCorrect)
+        .map((o) => o.text);
       const isCorrect =
         userAnswer.length === correctOptions.length &&
-        userAnswer.every((answer) => correctOptions.includes(answer));
-
-      if (isCorrect) {
-        score++;
-      }
+        userAnswer.every((a) => correctOptions.includes(a));
+      if (isCorrect) score++;
       return {
         questionId: question._id,
-        questionText: question.questionText,
         userAnswer,
-        correctAnswer: correctOptions,
         isCorrect,
       };
     });
-    console.log("----------resultDetails:", resultDetails);
-    let check = "old";
-    // Nếu đã có kết quả, cập nhật kết quả
-    if (assignmentResult) {
-      assignmentResult.answers = resultDetails.map((detail) => ({
-        questionId: detail.questionId,
-        selectedOptions: {
-          userAnswer: detail.userAnswer,
-          isCorrect: detail.isCorrect,
-        },
-      }));
-      submittedAt: (new Date(), (assignmentResult.score = score));
-      console.log("-----------old assignmentResult:", assignmentResult);
-      await assignmentResult.save();
-    } else {
-      // Nếu chưa có kết quả, tạo mới
-      assignmentResult = new AssignmentResult({
-        assignment: assignmentId,
-        student: userId,
-        answers: resultDetails.map((detail) => ({
-          questionId: detail.questionId,
-          selectedOptions: [
-            {
-              userAnswer: detail.userAnswer,
-              isCorrect: detail.isCorrect,
-            },
-          ],
-        })),
-        submittedAt: new Date(),
-        score,
+
+    result.answers = resultDetails.map((d) => ({
+      questionId: d.questionId,
+      selectedOptions: { userAnswer: d.userAnswer, isCorrect: d.isCorrect },
+    }));
+    result.score = score;
+    result.submittedAt = new Date();
+    result.attempts = (result.attempts || 0) + 1;
+
+    // Xác định đã "chốt" hay chưa (BR-14: chốt → BE mới trả đáp án đúng).
+    const attemptsUsed = result.attempts;
+    const canRetake =
+      assignment.allowRetake &&
+      (maxAttempts === 0 || attemptsUsed < maxAttempts);
+    result.isFinal = !canRetake;
+
+    // Reset startedAt để nếu được retake phải start lại.
+    result.startedAt = undefined;
+
+    await result.save();
+
+    // BR-14: chỉ trả correctAnswer khi đã chốt.
+    const totalScore = assignment.questions.length;
+    const payload = {
+      message: "Nộp bài thành công!",
+      score,
+      totalScore,
+      attemptsUsed,
+      maxAttempts,
+      isFinal: result.isFinal,
+      canRetake,
+    };
+
+    if (result.isFinal) {
+      payload.answers = assignment.questions.map((question) => {
+        const detail = resultDetails.find(
+          (d) => String(d.questionId) === String(question._id),
+        );
+        return {
+          questionId: question._id,
+          questionText: question.questionText,
+          userAnswer: detail?.userAnswer || [],
+          correctAnswer: question.options
+            .filter((o) => o.isCorrect)
+            .map((o) => o.text),
+          isCorrect: detail?.isCorrect || false,
+          explanation: question.explanation,
+        };
       });
-      check = "new";
-      console.log("--------- new assignmentResult:", assignmentResult);
-      await assignmentResult.save();
+    } else {
+      // Chưa chốt: chỉ biết đúng/sai cho từng câu, KHÔNG lộ đáp án.
+      payload.answers = resultDetails.map((d) => ({
+        questionId: d.questionId,
+        isCorrect: d.isCorrect,
+      }));
     }
 
-    res.json({
-      message: "Nộp bài thành công!",
-      assignmentResult,
-    });
+    res.json(payload);
   } catch (error) {
-    console.error("Lỗi khi nộp bài tập:", error);
+    logger.error({ err: error }, "Lỗi khi nộp bài tập");
     res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -1082,47 +1492,74 @@ export const getAllResultOfAssignment = async (req, res) => {
   }
 };
 
-// Hàm kiểm tra xem học sinh có được phép làm lại bài tập không
+// Trạng thái bài kiểm tra (mở rộng BR-12: báo thêm attempts & deadline).
 export const getUserAssignmentStatus = async (req, res) => {
   const assignmentId = req.params.assignmentId;
   const userId = req.params.userId;
 
   try {
-    // Tìm kết quả bài làm của người dùng dựa trên userId và assignmentId
+    const assignment = await Assignment.findById(assignmentId);
+    if (!assignment) {
+      return res.status(404).json({ message: "Không tìm thấy bài tập" });
+    }
+
     const result = await AssignmentResult.findOne({
       assignment: assignmentId,
       student: userId,
     });
-    console.log("result:", result);
+
+    const totalScore = assignment.questions.length;
+    const maxAttempts = Number(assignment.maxAttempts) || 0;
+    const timerMinutes = Number(assignment.timer) || 0;
 
     if (!result) {
-      // Nếu không tìm thấy kết quả, người dùng chưa làm bài
-      return res.json({ status: "not_started" });
+      return res.json({
+        status: "not_started",
+        totalScore,
+        maxAttempts,
+        timerMinutes,
+      });
     }
 
-    // Nếu tìm thấy kết quả, kiểm tra xem có cho phép làm lại hay không
-    const assignment = await Assignment.findById(assignmentId);
+    const attemptsUsed = result.attempts || 0;
+    const canRetake =
+      !result.isFinal &&
+      assignment.allowRetake &&
+      (maxAttempts === 0 || attemptsUsed < maxAttempts);
 
-    if (!assignment) {
-      return res.status(404).json({ message: "Không tìm thấy bài tập" });
-    }
-    let totalScore = assignment.questions.length;
-    console.log("totalScore:", totalScore);
+    const deadline =
+      timerMinutes > 0 && result.startedAt
+        ? new Date(
+            new Date(result.startedAt).getTime() + timerMinutes * 60 * 1000,
+          )
+        : null;
 
-    if (assignment.allowRetake) {
-      // Nếu cho phép làm lại, trạng thái là 'can_retake'
-      return res.json({ status: "can_retake", score: result.score });
-    } else {
-      // Nếu không cho phép làm lại, trạng thái là 'completed'
-      return res.json({ status: "completed", score: result.score, totalScore });
-    }
+    const inProgress = !!result.startedAt && !result.isFinal;
+
+    return res.json({
+      status: result.isFinal
+        ? "completed"
+        : inProgress
+          ? "in_progress"
+          : canRetake
+            ? "can_retake"
+            : "completed",
+      score: result.score,
+      totalScore,
+      attemptsUsed,
+      maxAttempts,
+      timerMinutes,
+      deadline,
+      canRetake,
+      isFinal: !!result.isFinal,
+    });
   } catch (error) {
-    console.error("Error fetching assignment status:", error);
+    logger.error({ err: error }, "Error fetching assignment status");
     res.status(500).json({ error: "Failed to fetch assignment status" });
   }
 };
 
-// Lấy kết quả bài kiểm tra cho học sinh
+// Kết quả chi tiết (BR-14: chỉ trả đáp án đúng khi đã chốt).
 export const getStudentAssignmentResults = async (req, res) => {
   try {
     const { assignmentId, userId } = req.params;
@@ -1131,13 +1568,12 @@ export const getStudentAssignmentResults = async (req, res) => {
     if (!assignment) {
       return res.status(404).json({ message: "Không tìm thấy bài tập" });
     }
-    let totalScore = assignment.questions.length;
+    const totalScore = assignment.questions.length;
 
     const assignmentResult = await AssignmentResult.findOne({
       assignment: assignmentId,
       student: userId,
-    }).populate("assignment");
-    console.log(assignmentResult);
+    });
 
     if (!assignmentResult) {
       return res
@@ -1145,43 +1581,42 @@ export const getStudentAssignmentResults = async (req, res) => {
         .json({ message: "Không tìm thấy kết quả bài làm." });
     }
 
-    // Format kết quả
-    const resultDetails = assignmentResult.assignment.questions.map(
-      (question) => {
-        // Lấy câu trả lời của người dùng từ assignmentResult.answers
-        const userAnswerObject = assignmentResult.answers.find(
-          (a) => a.questionId.toString() === question._id.toString(),
-        );
+    const revealCorrect = !!assignmentResult.isFinal;
 
-        // Lấy danh sách câu trả lời của người dùng, nếu không có thì trả về mảng rỗng
-        const userAnswer = userAnswerObject
-          ? userAnswerObject.selectedOptions.userAnswer // Access userAnswer directly
-          : [];
-
-        // Lấy danh sách đáp án đúng
-        const correctOptions = question.options
-          .filter((option) => option.isCorrect)
-          .map((option) => option.text);
-
-        return {
-          questionText: question.questionText,
-          userAnswer: userAnswer.join(", "), // Hiển thị câu trả lời của học sinh
-          correctAnswer: correctOptions.join(", "), // Hiển thị đáp án đúng
-          isCorrect: userAnswerObject
-            ? userAnswerObject.selectedOptions.isCorrect
-            : false,
-          explanation: question.explanation, // Hiển thị explanation được lưu trong question
-        };
-      },
-    );
+    const resultDetails = assignment.questions.map((question) => {
+      const userAnswerObject = (assignmentResult.answers || []).find(
+        (a) => a.questionId.toString() === question._id.toString(),
+      );
+      const userAnswer = userAnswerObject
+        ? userAnswerObject.selectedOptions.userAnswer
+        : [];
+      const isCorrect = userAnswerObject
+        ? userAnswerObject.selectedOptions.isCorrect
+        : false;
+      const base = {
+        questionText: question.questionText,
+        userAnswer: userAnswer.join(", "),
+        isCorrect,
+      };
+      if (revealCorrect) {
+        base.correctAnswer = question.options
+          .filter((o) => o.isCorrect)
+          .map((o) => o.text)
+          .join(", ");
+        base.explanation = question.explanation;
+      }
+      return base;
+    });
 
     res.json({
       score: assignmentResult.score,
       answers: resultDetails,
       totalScore,
+      isFinal: revealCorrect,
+      attemptsUsed: assignmentResult.attempts || 0,
     });
   } catch (error) {
-    console.error("Error fetching quiz result:", error);
+    logger.error({ err: error }, "Error fetching quiz result");
     res.status(500).json({ message: "Lỗi server." });
   }
 };
@@ -1221,7 +1656,7 @@ export const getEnrolledCourses = async (req, res) => {
 
     res.json(validEnrolledCourses);
   } catch (error) {
-    console.error("Lỗi khi lấy danh sách khóa học đã đăng ký:", error);
+    logger.error({ err: error }, "Lỗi khi lấy danh sách khóa học đã đăng ký");
     res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -1242,7 +1677,7 @@ export const getFavoriteCourses = async (req, res) => {
 
     res.json(user.favoriteCourses);
   } catch (error) {
-    console.error("Lỗi khi lấy danh sách khóa học yêu thích:", error);
+    logger.error({ err: error }, "Lỗi khi lấy danh sách khóa học yêu thích");
     res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -1265,7 +1700,7 @@ export const getRecommendedCourses = async (req, res) => {
 
     res.json(recommendedCourses);
   } catch (error) {
-    console.error("Lỗi khi lấy danh sách khóa học đề xuất:", error);
+    logger.error({ err: error }, "Lỗi khi lấy danh sách khóa học đề xuất");
     res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -1297,7 +1732,7 @@ export const addCourseToFavorites = async (req, res) => {
       favoriteCourses: user.favoriteCourses,
     });
   } catch (error) {
-    console.error("Lỗi khi thêm khóa học vào danh sách yêu thích:", error);
+    logger.error({ err: error }, "Lỗi khi thêm khóa học vào danh sách yêu thích");
     res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -1331,7 +1766,7 @@ export const removeCourseFromFavorites = async (req, res) => {
       favoriteCourses: user.favoriteCourses,
     });
   } catch (error) {
-    console.error("Lỗi khi xóa khóa học khỏi danh sách yêu thích:", error);
+    logger.error({ err: error }, "Lỗi khi xóa khóa học khỏi danh sách yêu thích");
     res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -1369,7 +1804,7 @@ export const getEnrolledStudents = async (req, res) => {
 
     res.json(formattedStudents);
   } catch (error) {
-    console.error("Lỗi khi lấy danh sách học viên đã đăng ký:", error);
+    logger.error({ err: error }, "Lỗi khi lấy danh sách học viên đã đăng ký");
     res.status(500).json({ message: "Lỗi server" });
   }
 };

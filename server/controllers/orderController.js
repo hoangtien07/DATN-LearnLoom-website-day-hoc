@@ -2,6 +2,7 @@ import crypto from "crypto";
 import Order from "../models/Order.js";
 import Course from "../models/Course.js";
 import User from "../models/User.js";
+import logger from "../utils/logger.js";
 
 const VNPAY_VERSION = "2.1.0";
 const VNPAY_COMMAND = "pay";
@@ -258,7 +259,7 @@ export const createOrder = async (req, res) => {
       .status(201)
       .json({ success: true, orderId: newOrder._id, order: newOrder });
   } catch (error) {
-    console.error("Error creating order:", error);
+    logger.error({ err: error }, "Error creating order");
     res
       .status(500)
       .json({ success: false, message: "Failed to create order." });
@@ -273,9 +274,8 @@ export const updateOrder = async (req, res) => {
     const updatedOrder = await Order.findOneAndUpdate(
       { userId, courseId }, // Tìm order
       { transactionId, paymentStatus: "success", paidAt: new Date() }, // Legacy path
-      { new: true }, // Trả về order đã được cập nhật
+      { new: true },
     );
-    console.log(updatedOrder);
 
     if (!updatedOrder) {
       return res.status(404).json({ message: "Order not found" });
@@ -283,7 +283,7 @@ export const updateOrder = async (req, res) => {
 
     res.json(updatedOrder);
   } catch (error) {
-    console.error("Error updating order:", error);
+    logger.error({ err: error }, "Error updating order");
     res.status(500).json({ message: "Error updating order" });
   }
 };
@@ -331,10 +331,16 @@ export const createVnpayPaymentUrl = async (req, res) => {
     const amount = Math.round(Number(order.amount) * 100);
     const createDate = formatDate(new Date());
     const expireDate = formatDate(new Date(Date.now() + 15 * 60 * 1000));
-    const txnRef = `ORD${order._id.toString().slice(-8)}${Date.now()}`;
+    // Reuse txnRef nếu đã có để tránh mất giao dịch khi user bấm thanh toán lại.
+    // Chỉ sinh mới khi order chưa từng khởi tạo URL thanh toán.
+    const txnRef =
+      order.paymentGatewayTxnRef ||
+      `ORD${order._id.toString().slice(-8)}${Date.now()}`;
     const returnUrl = `${getBackendBaseUrl()}/api/orders/payment/vnpay-return`;
 
-    order.paymentGatewayTxnRef = txnRef;
+    if (!order.paymentGatewayTxnRef) {
+      order.paymentGatewayTxnRef = txnRef;
+    }
     order.paymentStatus = "pending";
     order.failedAt = undefined;
     await order.save();
@@ -364,7 +370,7 @@ export const createVnpayPaymentUrl = async (req, res) => {
 
     return res.json({ success: true, paymentUrl, orderId: order._id });
   } catch (error) {
-    console.error("Error creating VNPay URL:", error);
+    logger.error({ err: error }, "Error creating VNPay URL");
     return res
       .status(500)
       .json({ success: false, message: "Failed to create VNPay URL" });
@@ -379,7 +385,7 @@ export const handleVnpayIpn = async (req, res) => {
       Message: result.message,
     });
   } catch (error) {
-    console.error("Error handling VNPay IPN:", error);
+    logger.error({ err: error }, "Error handling VNPay IPN");
     return res.json({ RspCode: "99", Message: "Unknown error" });
   }
 };
@@ -416,7 +422,7 @@ export const handleVnpayReturn = async (req, res) => {
       `${frontendBaseUrl}/payment-redirect?${redirectParams.toString()}`,
     );
   } catch (error) {
-    console.error("Error handling VNPay return:", error);
+    logger.error({ err: error }, "Error handling VNPay return");
     const frontendBaseUrl = getFrontendBaseUrl();
     return res.redirect(
       `${frontendBaseUrl}/payment-redirect?status=fail&message=${encodeURIComponent("Payment processing error")}`,
@@ -455,7 +461,7 @@ export const getOrderPaymentStatus = async (req, res) => {
       updatedAt: order.updatedAt,
     });
   } catch (error) {
-    console.error("Error fetching order payment status:", error);
+    logger.error({ err: error }, "Error fetching order payment status");
     return res.status(500).json({
       success: false,
       message: "Failed to fetch order payment status",
@@ -463,12 +469,74 @@ export const getOrderPaymentStatus = async (req, res) => {
   }
 };
 
+const parsePagination = (req, defaultLimit = 20, maxLimit = 100) => {
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(
+    Math.max(parseInt(req.query.limit, 10) || defaultLimit, 1),
+    maxLimit,
+  );
+  return { page, limit, skip: (page - 1) * limit };
+};
+
 export const getOrders = async (req, res) => {
   try {
-    const orders = await Order.find();
-    res.json(orders);
+    const { page, limit, skip } = parsePagination(req);
+    const [orders, total] = await Promise.all([
+      Order.find().sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Order.countDocuments(),
+    ]);
+    res.json({
+      data: orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: `Error get all order: ${error.message}` });
+  }
+};
+
+// LUỒNG 3: Student xem lịch sử đơn hàng của chính mình.
+export const getMyOrders = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const { page, limit, skip } = parsePagination(req);
+
+    // Filter theo status nếu query có.
+    const filter = { userId };
+    const allowedStatus = ["pending", "success", "fail"];
+    if (req.query.status && allowedStatus.includes(req.query.status)) {
+      filter.paymentStatus = req.query.status;
+    }
+
+    const [orders, total] = await Promise.all([
+      Order.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("courseId", "slug name image_url price"),
+      Order.countDocuments(filter),
+    ]);
+
+    res.json({
+      data: orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    logger.error({ err: error }, "Error fetching my orders");
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -476,13 +544,24 @@ export const getOrders = async (req, res) => {
 export const getOrdersByTeacher = async (req, res) => {
   try {
     const teacherId = req.params.teacherId;
+    const { page, limit, skip } = parsePagination(req);
 
-    // Tìm danh sách hóa đơn dựa trên teacherId
-    const orders = await Order.find({ teacherId });
+    const [orders, total] = await Promise.all([
+      Order.find({ teacherId }).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Order.countDocuments({ teacherId }),
+    ]);
 
-    res.json(orders);
+    res.json({
+      data: orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
   } catch (error) {
-    console.error("Lỗi khi lấy danh sách hóa đơn theo teacherId:", error);
+    logger.error({ err: error }, "Lỗi khi lấy danh sách hóa đơn theo teacherId");
     res.status(500).json({ message: "Lỗi server" });
   }
 };

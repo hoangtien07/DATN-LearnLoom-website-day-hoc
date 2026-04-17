@@ -7,6 +7,7 @@ import session from "express-session";
 import passport from "passport";
 import "./config/passportConfig.js";
 import connectDB from "./config/db.js";
+import logger from "./utils/logger.js";
 
 import courseRoutes from "./routes/courseRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -18,10 +19,18 @@ import orderRoutes from "./routes/orderRoutes.js";
 import subjectRoutes from "./routes/subjectRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import teacherRoutes from "./routes/teacherRoutes.js";
+import instructorApplicationRoutes from "./routes/instructorApplicationRoutes.js";
 // import adminRoutes from "./routes/adminRoutes.js";
 import { isAuthenticated, checkRole } from "./middleware/isAuthenticated.js";
 
 dotenv.config();
+
+if (!process.env.SESSION_SECRET) {
+  logger.error(
+    "SESSION_SECRET không được thiết lập. Server sẽ không khởi động để tránh lộ lỗ hổng bảo mật.",
+  );
+  process.exit(1);
+}
 
 const app = express();
 
@@ -79,6 +88,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/instructor-applications", instructorApplicationRoutes);
 // app.use("/api/student", studentRoutes);
 app.use("/api/teacher", teacherRoutes);
 // app.use("/api/admin", adminRoutes);
@@ -87,5 +97,5 @@ app.use("/api/teacher", teacherRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  logger.info({ port: PORT }, "Server running");
 });

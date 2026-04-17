@@ -30,6 +30,16 @@
       desc: "Quản lý danh mục môn học để tối ưu phân loại và tìm kiếm.",
       href: "/admin/subject-management",
     },
+    {
+      title: "Duyệt giảng viên",
+      desc: "Xem đơn đăng ký làm giảng viên và phê duyệt hoặc từ chối.",
+      href: "/admin/instructor-applications",
+    },
+    {
+      title: "Duyệt khóa học",
+      desc: "Xem khóa học đang chờ phê duyệt và cho phép xuất bản công khai.",
+      href: "/admin/course-review",
+    },
   ];
 </script>
 

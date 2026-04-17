@@ -93,6 +93,14 @@
       return "subject";
     }
 
+    if (path.startsWith("/admin/instructor-applications")) {
+      return "instructor-applications";
+    }
+
+    if (path.startsWith("/admin/course-review")) {
+      return "course-review";
+    }
+
     return "";
   };
 
@@ -144,6 +152,18 @@
             <a
               class:active={adminActiveTab === "subject"}
               href="/admin/subject-management">Quản lý môn học</a
+            >
+          </li>
+          <li>
+            <a
+              class:active={adminActiveTab === "instructor-applications"}
+              href="/admin/instructor-applications">Duyệt giảng viên</a
+            >
+          </li>
+          <li>
+            <a
+              class:active={adminActiveTab === "course-review"}
+              href="/admin/course-review">Duyệt khóa học</a
             >
           </li>
         </ul>
@@ -254,6 +274,20 @@
                 <DropdownItem
                   ><a href="/profile">Thông tin cá nhân</a></DropdownItem
                 >
+                <DropdownItem
+                  ><a href="/profile/orders"
+                    >Lịch sử mua hàng <i class="bi bi-receipt ms-1"></i></a
+                  ></DropdownItem
+                >
+                {#if $user.role === "student"}
+                  <DropdownItem
+                    ><a href="/instructor/apply"
+                      >Đăng ký làm giảng viên <i
+                        class="bi bi-mortarboard ms-1"
+                      ></i></a
+                    ></DropdownItem
+                  >
+                {/if}
                 <DropdownItem
                   ><a href={getAuthUrl("/auth/logout")} class="d-block"
                     >Đăng xuất <i class="bi bi-box-arrow-right ms-1"></i></a

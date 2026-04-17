@@ -86,16 +86,25 @@ export const deleteChatMessage = async ({ messageId, sessionKey }) => {
   }
 };
 
-// Lấy toàn bộ khóa học
-export const fetchCourses = async () => {
+// Lấy toàn bộ khóa học (có pagination).
+// Giữ chữ ký cũ: mặc định trả về mảng courses; nếu cần pagination dùng fetchCoursesPaginated.
+export const fetchCourses = async (params = {}) => {
   try {
-    const response = await apiClient.get("/api/courses");
-
-    return response.data;
+    const response = await apiClient.get("/api/courses", { params });
+    // Hỗ trợ cả response cũ (array) và response mới ({ data, pagination }).
+    return Array.isArray(response.data) ? response.data : response.data?.data || [];
   } catch (error) {
     console.error("Error fetching courses:", error);
     throw error;
   }
+};
+
+export const fetchCoursesPaginated = async (params = {}) => {
+  const response = await apiClient.get("/api/courses", { params });
+  if (Array.isArray(response.data)) {
+    return { data: response.data, pagination: null };
+  }
+  return response.data;
 };
 
 // Lấy khóa học bằng slug
@@ -611,11 +620,13 @@ export const getQuizResult = async (assignmentId, userId) => {
 
 // ---------- Review
 
-// Lấy danh sách đánh giá cho khóa học
-export const getReviews = async (courseId) => {
+// Lấy danh sách đánh giá cho khóa học (có pagination)
+export const getReviews = async (courseId, params = {}) => {
   try {
-    const response = await apiClient.get(`/api/reviews/${courseId}`);
-    return response.data;
+    const response = await apiClient.get(`/api/reviews/${courseId}`, { params });
+    return Array.isArray(response.data)
+      ? response.data
+      : response.data?.data || [];
   } catch (error) {
     console.error("Error fetching reviews:", error);
     throw error;
@@ -753,11 +764,13 @@ export const updateOrder = async (userId, courseId, transactionId) => {
   }
 };
 
-// Lấy các giao dịch
-export const getOrder = async () => {
+// Lấy các giao dịch (admin)
+export const getOrder = async (params = {}) => {
   try {
-    const response = await apiClient.get(`/api/orders/`);
-    return response.data;
+    const response = await apiClient.get(`/api/orders/`, { params });
+    return Array.isArray(response.data)
+      ? response.data
+      : response.data?.data || [];
   } catch (error) {
     console.error("Error fetching order:", error);
     throw error;
@@ -887,12 +900,92 @@ export const getEnrolledStudents = async (courseId) => {
 };
 
 // Lấy danh sách hóa đơn theo teacherId
-export const getOrdersByTeacher = async (teacherId) => {
+export const getOrdersByTeacher = async (teacherId, params = {}) => {
   try {
-    const response = await apiClient.get(`/api/orders/teacher/${teacherId}`);
-    return response.data;
+    const response = await apiClient.get(`/api/orders/teacher/${teacherId}`, {
+      params,
+    });
+    return Array.isArray(response.data)
+      ? response.data
+      : response.data?.data || [];
   } catch (error) {
     console.error(`Error fetching orders for teacher ${teacherId}:`, error);
     throw error;
   }
+};
+
+// ---------- Course Moderation (BR-20) ----------
+
+export const listPendingCourses = async (params = {}) => {
+  const response = await apiClient.get("/api/courses/admin/pending-review", {
+    params,
+  });
+  if (Array.isArray(response.data)) {
+    return { data: response.data, pagination: null };
+  }
+  return response.data;
+};
+
+export const approveCourseReview = async (slug) => {
+  const response = await apiClient.put(`/api/courses/${slug}/review/approve`);
+  return response.data;
+};
+
+export const rejectCourseReview = async (slug, rejectionReason) => {
+  const response = await apiClient.put(`/api/courses/${slug}/review/reject`, {
+    rejectionReason,
+  });
+  return response.data;
+};
+
+// ---------- My Orders (LUỒNG 3) ----------
+
+export const getMyOrders = async (params = {}) => {
+  const response = await apiClient.get("/api/orders/mine", { params });
+  if (Array.isArray(response.data)) {
+    return { data: response.data, pagination: null };
+  }
+  return response.data;
+};
+
+// ---------- Instructor Applications ----------
+
+// User gửi đơn xin làm giảng viên.
+export const submitInstructorApplication = async (payload) => {
+  const response = await apiClient.post("/api/instructor-applications", payload);
+  return response.data;
+};
+
+// User xem các đơn của mình.
+export const getMyInstructorApplications = async () => {
+  const response = await apiClient.get("/api/instructor-applications/mine");
+  return Array.isArray(response.data) ? response.data : [];
+};
+
+// Admin liệt kê đơn (có filter status).
+export const listInstructorApplications = async (params = {}) => {
+  const response = await apiClient.get("/api/instructor-applications", {
+    params,
+  });
+  if (Array.isArray(response.data)) {
+    return { data: response.data, pagination: null };
+  }
+  return response.data;
+};
+
+// Admin duyệt đơn.
+export const approveInstructorApplication = async (id) => {
+  const response = await apiClient.put(
+    `/api/instructor-applications/${id}/approve`,
+  );
+  return response.data;
+};
+
+// Admin từ chối đơn.
+export const rejectInstructorApplication = async (id, rejectionReason) => {
+  const response = await apiClient.put(
+    `/api/instructor-applications/${id}/reject`,
+    { rejectionReason },
+  );
+  return response.data;
 };

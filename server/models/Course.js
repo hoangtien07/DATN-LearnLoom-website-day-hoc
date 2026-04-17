@@ -90,6 +90,21 @@ const courseSchema = new mongoose.Schema(
     published_at: {
       type: Date,
     },
+    // BR-20: Course moderation workflow.
+    // - "none": khóa học đang nháp, chưa submit review.
+    // - "pending": instructor đã submit, chờ admin duyệt.
+    // - "approved": admin đã duyệt (khóa học có thể xuất bản).
+    // - "rejected": admin từ chối (instructor phải sửa và submit lại).
+    reviewStatus: {
+      type: String,
+      enum: ["none", "pending", "approved", "rejected"],
+      default: "none",
+      index: true,
+    },
+    reviewSubmittedAt: { type: Date },
+    reviewedAt: { type: Date },
+    reviewedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    reviewRejectionReason: { type: String, trim: true, maxlength: 1000 },
     is_deleted: {
       type: Boolean,
       default: false,

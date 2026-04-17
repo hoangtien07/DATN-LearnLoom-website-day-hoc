@@ -36,6 +36,26 @@
   $: enrolledCount = Number(course?.totalStudentsEnrolled || 0);
   $: canMoveToDraft = !course?.is_published || enrolledCount === 0;
 
+  // BR-20: label nút publish theo reviewStatus.
+  $: publishLabel = (() => {
+    if (course.is_published) return canMoveToDraft ? "Ngừng bán" : "Đã có học viên";
+    switch (course.reviewStatus) {
+      case "pending":
+        return "Đang chờ duyệt";
+      case "rejected":
+        return "Gửi duyệt lại";
+      case "approved":
+        return "Xuất bản";
+      default:
+        return "Gửi duyệt";
+    }
+  })();
+
+  $: publishDisabled =
+    isActing ||
+    (course.is_published && !canMoveToDraft) ||
+    course.reviewStatus === "pending";
+
   const handlePublishToggle = async (e) => {
     e.preventDefault();
 
@@ -52,8 +72,21 @@
         await unpublishCourse(course.slug);
         course = { ...course, is_published: false };
       } else {
-        await publishCourse(course.slug);
-        course = { ...course, is_published: true };
+        const res = await publishCourse(course.slug);
+        const updated = res?.course || course;
+        course = {
+          ...course,
+          is_published: !!updated.is_published,
+          reviewStatus: updated.reviewStatus || course.reviewStatus,
+          reviewSubmittedAt:
+            updated.reviewSubmittedAt || course.reviewSubmittedAt,
+          reviewRejectionReason: updated.reviewRejectionReason,
+        };
+        if (!updated.is_published && updated.reviewStatus === "pending") {
+          window.alert(
+            "Đã gửi yêu cầu duyệt. Khóa học sẽ được xuất bản sau khi admin chấp nhận.",
+          );
+        }
       }
       dispatch("courseUpdated", course);
     } catch (err) {
@@ -137,6 +170,28 @@
             >
               {course.is_published ? "Đã xuất bản" : "Bản nháp"}
             </span>
+            {#if course.reviewStatus === "pending"}
+              <span
+                class="course-status-badge review-pending"
+                title="Đang chờ admin duyệt"
+              >
+                <i class="bi bi-hourglass-split"></i> Chờ duyệt
+              </span>
+            {:else if course.reviewStatus === "rejected"}
+              <span
+                class="course-status-badge review-rejected"
+                title={course.reviewRejectionReason || "Admin đã từ chối"}
+              >
+                <i class="bi bi-x-circle"></i> Bị từ chối
+              </span>
+            {:else if course.reviewStatus === "approved" && !course.is_published}
+              <span
+                class="course-status-badge review-approved"
+                title="Đã được duyệt, sẵn sàng xuất bản"
+              >
+                <i class="bi bi-check-circle"></i> Đã duyệt
+              </span>
+            {/if}
             {#if enrolledCount > 0}
               <span
                 class="course-status-badge enrolled"
@@ -146,6 +201,12 @@
               </span>
             {/if}
           </div>
+          {#if course.reviewStatus === "rejected" && course.reviewRejectionReason}
+            <div class="rejection-reason">
+              <strong>Lý do từ chối:</strong>
+              {course.reviewRejectionReason}
+            </div>
+          {/if}
         {/if}
       </CardBody>
     </Card>
@@ -165,19 +226,19 @@
       <button
         class="cia-btn {course.is_published ? 'unpublish' : 'publish'}"
         on:click={handlePublishToggle}
-        disabled={isActing || (course.is_published && !canMoveToDraft)}
+        disabled={publishDisabled}
         title={course.is_published
           ? canMoveToDraft
             ? "Ngừng bán (chuyển về bản nháp)"
             : "Khóa học đã có học viên, không thể ngừng bán theo cách về nháp"
-          : "Xuất bản"}
+          : course.reviewStatus === "pending"
+            ? "Đang chờ admin duyệt"
+            : course.reviewStatus === "rejected"
+              ? "Sửa theo góp ý và gửi lại duyệt"
+              : "Gửi khóa học đi duyệt để xuất bản"}
       >
         <i class="bi bi-{course.is_published ? 'eye-slash' : 'send-check'}"></i>
-        {course.is_published
-          ? canMoveToDraft
-            ? "Ngừng bán"
-            : "Đã có học viên"
-          : "Xuất bản"}
+        {publishLabel}
       </button>
       <button
         class="cia-btn hide"
@@ -357,6 +418,36 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
+  }
+  .course-status-badge.review-pending {
+    background: #fef3c7;
+    color: #b45309;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .course-status-badge.review-rejected {
+    background: #fee2e2;
+    color: #991b1b;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .course-status-badge.review-approved {
+    background: #dbeafe;
+    color: #1e3a8a;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .rejection-reason {
+    margin-top: 0.4rem;
+    padding: 0.4rem 0.6rem;
+    background: #fef2f2;
+    border-left: 3px solid #dc2626;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    color: #7f1d1d;
   }
   .course-item-actions {
     margin-top: 0.55rem;

@@ -149,13 +149,29 @@
     }
   };
 
+  // Backend giờ trả về populated item (sections.items.itemId là object có name).
+  // Chỉ fallback gọi getItem nếu thiếu (giữ tương thích với dữ liệu cũ).
   const hydrateSectionItemNames = async (sections = []) => {
     await Promise.all(
       sections.map(async (section) => {
         if (!Array.isArray(section.items)) return;
         await Promise.all(
           section.items.map(async (item) => {
-            item.name = await getItemName(item);
+            const populated = item.itemId;
+            if (populated && typeof populated === "object" && populated.name) {
+              item.name = populated.name;
+              item.isPreview = !!populated.isPreview;
+              item.isLocked = !!populated.isLocked;
+              // Chuẩn hóa itemId về string để link điều hướng không đổi.
+              item.itemId = populated._id || populated.id || item.itemId;
+              return;
+            }
+            try {
+              item.name = await getItemName(item);
+            } catch (err) {
+              item.name = "Nội dung khóa học";
+              item.isLocked = true;
+            }
           }),
         );
       }),
@@ -432,30 +448,35 @@
           <div class="section" data-index={sectionIndex}>
             <p>{section.name}</p>
             <ul>
-              {#each section.items as item, itemIndex}
-                {#if completedItems.includes(item.itemId)}
-                  <li>
-                    {#if item.itemType === "lesson"}
-                      <a
-                        href="/course/{course.slug}/learn/lesson/{item.itemId}"
-                        class="item"
-                      >
-                        {item.name || "Loading..."} ({item.itemType})
-                      </a>
-                    {:else}
-                      <a
-                        href="/course/{course.slug}/learn/assignment/{item.itemId}"
-                        class="item"
-                      >
-                        {item.name || "Loading..."} ({item.itemType})
-                      </a>
-                    {/if}
-                  </li>
-                {:else}
-                  <li class:completed={completedItems.includes(item.itemId)}>
-                    <p>{item.name || "Loading..."} ({item.itemType})</p>
-                  </li>
-                {/if}
+              {#each section.items as item}
+                {@const canOpen =
+                  isEnrolled || item.isPreview || !item.isLocked}
+                <li
+                  class:completed={completedItems.includes(item.itemId)}
+                  class:locked={!canOpen}
+                >
+                  {#if canOpen}
+                    <a
+                      href="/course/{course.slug}/learn/{item.itemType}/{item.itemId}"
+                      class="item"
+                    >
+                      <i
+                        class="bi {item.itemType === 'lesson'
+                          ? 'bi-play-circle'
+                          : 'bi-patch-question'}"
+                      ></i>
+                      {item.name || "Nội dung"}
+                      {#if item.isPreview && !isEnrolled}
+                        <span class="preview-badge">Preview</span>
+                      {/if}
+                    </a>
+                  {:else}
+                    <span class="item locked-item" title="Đăng ký khóa học để mở">
+                      <i class="bi bi-lock"></i>
+                      {item.name || "Nội dung"}
+                    </span>
+                  {/if}
+                </li>
               {/each}
             </ul>
           </div>
@@ -465,6 +486,7 @@
     <Reviews
       {course}
       {isEnrolled}
+      {userProgress}
       user={$user}
       {reviews}
       on:reviewSubmitted={fetchReviews}

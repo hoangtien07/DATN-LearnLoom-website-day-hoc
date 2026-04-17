@@ -22,6 +22,7 @@ import {
   getAllResultOfAssignment,
   getUserAssignmentStatus,
   submitQuiz,
+  startQuiz,
   getStudentAssignmentResults,
   getEnrolledCourses,
   getFavoriteCourses,
@@ -38,19 +39,24 @@ import {
   getDeletedCoursesAdmin,
   restoreDeletedCourse,
   toggleLessonVisibility,
+  getCoursesPendingReview,
+  approveCourseReview,
+  rejectCourseReview,
 } from "../controllers/courseController.js";
+import { validateBody, rules } from "../utils/validate.js";
 import {
   isAuthenticated,
   checkRole,
   checkRoles,
 } from "../middleware/isAuthenticated.js";
+import { canAccessLesson } from "../middleware/canAccessLesson.js";
 
 const router = express.Router();
 
 // --- GET Routes ---
 
-// Lấy bài học/ bài kiểm tra
-router.get("/items/:itemType/:itemId", getItem);
+// Lấy bài học/ bài kiểm tra — chặn nếu khóa học trả phí mà user chưa enrolled.
+router.get("/items/:itemType/:itemId", canAccessLesson(), getItem);
 // Lấy mục lục
 router.get("/:slug/sections", getSectionsByCourseSlug);
 // Lấy khóa học
@@ -69,6 +75,13 @@ router.get(
   isAuthenticated,
   checkRole("admin"),
   getDeletedCoursesAdmin,
+);
+// Admin: danh sách khóa học chờ duyệt (BR-20).
+router.get(
+  "/admin/pending-review",
+  isAuthenticated,
+  checkRole("admin"),
+  getCoursesPendingReview,
 );
 // Lấy trạng thái bài kiểm tra của học sinh
 router.get(
@@ -143,6 +156,23 @@ router.put(
   checkRole("admin"),
   restoreDeletedCourse,
 );
+
+// BR-20: Admin duyệt / từ chối khóa học chờ review.
+router.put(
+  "/:slug/review/approve",
+  isAuthenticated,
+  checkRole("admin"),
+  approveCourseReview,
+);
+router.put(
+  "/:slug/review/reject",
+  isAuthenticated,
+  checkRole("admin"),
+  validateBody({
+    rejectionReason: rules.string({ min: 5, max: 1000 }),
+  }),
+  rejectCourseReview,
+);
 // Cập nhật khóa học
 router.put(
   "/:slug",
@@ -161,8 +191,14 @@ router.post("/:slug/:userId/enroll", enrollCourse);
 router.post("/:slug/sections/:sectionId/items", addItemToSection);
 // Thêm mục lục vào khóa học
 router.post("/:slug/sections", addSection);
-// Nộp bài kiểm tra
-router.post("/assignments/:assignmentId/submit", submitQuiz);
+// BR-12: Bắt đầu làm bài → server ghi startedAt, trả câu hỏi đã strip đáp án.
+router.post(
+  "/assignments/:assignmentId/start",
+  isAuthenticated,
+  startQuiz,
+);
+// Nộp bài kiểm tra (bắt buộc đăng nhập để enforce timer & max attempts).
+router.post("/assignments/:assignmentId/submit", isAuthenticated, submitQuiz);
 // Tạo khóa học
 router.post(
   "/",

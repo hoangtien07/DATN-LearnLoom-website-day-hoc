@@ -9,6 +9,8 @@ const baseLessonSchema = new mongoose.Schema(
     description: { type: String },
     duration: { type: Number }, // Duration in minutes
     visible: { type: Boolean, default: true },
+    // Cho phép giảng viên đánh dấu bài học mở preview công khai (không cần enroll).
+    isPreview: { type: Boolean, default: false },
   },
   { timestamps: true, discriminatorKey: "type" },
 );
