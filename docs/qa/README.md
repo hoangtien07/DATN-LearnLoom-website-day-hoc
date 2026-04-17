@@ -61,7 +61,6 @@ Duyệt catalog → Enroll (free hoặc VNPay) → Học bài → Quiz → Revie
 | M15 | **Security baseline (P0/P1)** | Rate-limit, field whitelist, session guard, audit log |
 | M16 | **Responsive UI** | Mobile, tablet, desktop |
 | M17 | **Cross-browser** | Chrome, Firefox, Edge (min) |
-| M18 | **Data migration** | `migrateReviewStatus.js` |
 
 ### 3.2. Test types cần cover
 
@@ -133,34 +132,60 @@ npm run dev
 
 ## 5. Seed dữ liệu test
 
+Máy QA kéo code về lần đầu → DB rỗng → chạy **1 lệnh** là có đủ data cho mọi test case.
+
 ```bash
 cd server
-node scripts/seedTestData.js              # dry-run — in kế hoạch
-node scripts/seedTestData.js --apply      # thực sự tạo
-node scripts/seedTestData.js --apply --purge  # xoá data QA cũ rồi tạo mới
+npm install                                    # chỉ cần lần đầu
+cp .env.example .env && chỉnh MONGO_URI / SESSION_SECRET / ...
+
+node scripts/seedTestData.js                   # dry-run — xem kế hoạch (không cần Mongo chạy)
+node scripts/seedTestData.js --apply           # thực sự tạo
+node scripts/seedTestData.js --apply --purge   # xoá QA data cũ rồi tạo lại (reset về baseline)
 ```
 
-### Sau khi seed:
+### Sau khi seed — 8 tài khoản
 
-| Role | Email | Đặc điểm |
-|------|-------|----------|
-| Admin | `admin.qa@learnloom.test` | Xem được tất cả module admin |
-| Instructor | `instructor.qa@learnloom.test` | Owner của 2 course test |
-| Student 1 | `student1.qa@learnloom.test` | Enrolled `test-js-basic` progress **60%**, có 1 order success + 1 pending, 1 review |
-| Student 2 | `student2.qa@learnloom.test` | Chưa enroll gì — để test BR-01 khóa nội dung, BR-17 guest quota |
+| Role | Email | Đặc điểm phục vụ test |
+|------|-------|----------------------|
+| Admin | `admin.qa@learnloom.test` | Vào mọi module admin |
+| Instructor 1 | `instructor1.qa@learnloom.test` | Owner `test-js-basic`, `test-react-advanced` |
+| Instructor 2 | `instructor2.qa@learnloom.test` | Owner 4 course còn lại (draft/pending/rejected/free) |
+| Student 1 | `student1.qa@learnloom.test` | Enrolled `test-js-basic` @ **60%** · đã review · có 3 order (success/pending/fail) |
+| Student 2 | `student2.qa@learnloom.test` | Enrolled `test-js-basic` @ **20%** (test BR-10 progress chưa đủ) |
+| Student 3 | `student3.qa@learnloom.test` | Chưa enroll gì (test BR-01 khoá content, nộp đơn GV fresh) |
+| Student 4 | `student4.qa@learnloom.test` | Có đơn đăng ký GV **PENDING** (admin duyệt) |
+| Student 5 | `student5.qa@learnloom.test` | Có đơn đăng ký GV **REJECTED** kèm reason |
 
-| Course slug | Đặc điểm | Mục đích test |
-|-------------|----------|---------------|
-| `test-js-basic` | Trả phí 199k, đã approved, published, có 3 lesson (1 preview + 2 trả phí) + 1 quiz (timer 5 phút, maxAttempts 2, allowRetake=true) | BR-01/05/10/11/12/14, M5, M6, M7 |
-| `test-css-draft` | Nháp 99k, `reviewStatus="none"` | BR-20 (gửi duyệt → approve/reject flow) |
+### Sau khi seed — 6 khóa học
 
-### ⚠️ Authentication trong môi trường QA
+| Slug | Giá | Trạng thái | Phục vụ test |
+|------|-----|------------|--------------|
+| `test-js-basic` | 199 000đ | approved · published | BR-01/05/10/11/12/14 · có 5 lesson (preview + text + video + audio + live) + 3 quiz (timer bình thường / no-retake / timer 1 phút cho TIMER_EXPIRED) |
+| `test-react-advanced` | 499 000đ | approved · published | Filter catalog, cross-course |
+| `test-css-draft` | 99 000đ | **none** · draft | BR-20 submit duyệt lần đầu |
+| `test-html-pending` | 79 000đ | **pending** · draft | BR-20 admin duyệt |
+| `test-ui-rejected` | 89 000đ | **rejected** + reason | BR-20 xem reason & gửi lại |
+| `test-free-html` | **0đ** | approved · published | M4 enroll free flow |
 
-Hệ thống **chỉ hỗ trợ Google OAuth** — không có password login. 2 cách:
+Script tạo thêm: 4 subjects, 2 comments mẫu, 1 review 5⭐ của student1.
 
-**Cách 1 (UI E2E test):** Đổi email trong `seedTestData.js` sang các Gmail thật QA sở hữu (4 account), rồi login bằng OAuth trên UI. Tương tự với `googleId` — hệ thống tự upsert khi user OAuth lần đầu (lần seed đầu sẽ tạo user với googleId fake, user thực login sẽ tạo **tài khoản khác** — cần xoá user seed trước).
+### ⚠️ Authentication — vì hệ thống chỉ hỗ trợ Google OAuth
 
-**Cách 2 (API test với Postman):** Login 1 Gmail thật → role student → dùng admin seed script để promote `admin.qa@learnloom.test` thành role admin (hoặc gán role trực tiếp trong MongoDB cho Gmail test của bạn).
+Có 2 lựa chọn, tuỳ kịch bản test:
+
+**Cách 1 — UI E2E test (khuyến nghị):**
+1. Mở `server/scripts/seedTestData.js`, đổi `email` của các user QA sang Gmail thật tester sở hữu (tối thiểu `admin.qa` và 2-3 student).
+2. Chạy `node scripts/seedTestData.js --apply --purge`.
+3. Trên browser, login OAuth bằng Gmail tương ứng → hệ thống tự link `googleId` thật với user đã seed và giữ `role` đã set.
+
+**Cách 2 — API test nhanh (dev shortcut, không cần đổi email):**
+1. Login OAuth 1 Gmail bất kỳ → DB tạo user role=student.
+2. Mở MongoDB Compass → tìm user vừa tạo → sửa `role` thành `admin` hoặc `instructor` tuỳ scope test.
+3. Copy cookie `connect.sid` từ browser DevTools → paste vào Postman.
+
+**Cách 3 — API test với user seed sẵn:**
+Nếu tester chỉ test API qua Postman/curl và không quan tâm session, có thể gọi endpoint `PUT /api/users/:userId` từ admin session để flip role bất kỳ user nào — hoặc gán trực tiếp trong MongoDB.
 
 ---
 
@@ -187,8 +212,7 @@ Chi tiết trong [`TEST_CASES.md`](TEST_CASES.md). Tóm tắt:
 | M15 Security baseline | TC-M15-01 → TC-M15-08 | 8 | 6 | 2 | 0 |
 | M16 Responsive UI | TC-M16-01 → TC-M16-04 | 4 | 2 | 2 | 0 |
 | M17 Cross-browser | TC-M17-01 → TC-M17-03 | 3 | 2 | 1 | 0 |
-| M18 Migration | MG-01 → MG-03 | 3 | 3 | 0 | 0 |
-| **TOTAL** | — | **~127** | **92** | **32** | **3** |
+| **TOTAL** | — | **~124** | **89** | **32** | **3** |
 
 ---
 
@@ -226,7 +250,6 @@ Sprint test hoàn thành khi:
 - [ ] **0 bug Critical** chưa close.
 - [ ] **0 bug High** chưa close (hoặc đã có hotfix merged).
 - [ ] **Security checklist** pass 100% (xem [`TEST_CASES.md`](TEST_CASES.md) mục Security).
-- [ ] **Migration scripts** chạy thành công trên dữ liệu seed.
 - [ ] **Smoke test** sau mỗi hotfix đều pass.
 
 ### Khuyến nghị
@@ -253,8 +276,7 @@ Sprint test hoàn thành khi:
 | [`API_CHEATSHEET.md`](API_CHEATSHEET.md) | Curl + Postman examples |
 | [`BUG_REPORT_TEMPLATE.md`](BUG_REPORT_TEMPLATE.md) | Template khi log bug |
 | [`../../README.md`](../../README.md) | README gốc: kiến trúc, cài đặt |
-| [`../../server/scripts/seedTestData.js`](../../server/scripts/seedTestData.js) | Script seed data QA |
-| [`../../server/scripts/migrateReviewStatus.js`](../../server/scripts/migrateReviewStatus.js) | Migration reviewStatus |
+| [`../../server/scripts/seedTestData.js`](../../server/scripts/seedTestData.js) | Script seed data QA — dùng lại mỗi khi reset DB |
 
 ---
 

@@ -1,6 +1,6 @@
 # 📝 Test Cases — LearnLoom (Full System)
 
-> **~127 test case** cover toàn bộ hệ thống, không chỉ các BR mới.
+> **~124 test case** cover toàn bộ hệ thống, không chỉ các BR mới.
 > Format: **ID · Title · Preconditions · Steps · Expected · Priority · Type**
 
 ## Quy ước
@@ -456,19 +456,6 @@ Check breakpoint đã có trong CSS.
 
 ---
 
-# M18 · Data migration
-
-### MG-01 · Dry-run `migrateReviewStatus.js` — P1 · DI
-In số course sẽ update, không ghi DB.
-
-### MG-02 · `--apply` → course đã published set `reviewStatus: "approved"` — P1 · DI
-Kiểm với MongoDB Compass.
-
-### MG-03 · Sau migrate, instructor publish course cũ không bị về pending — P1 · FN
-Vì reviewStatus đã approved → publish thẳng.
-
----
-
 # Smoke tests (chạy sau mọi hotfix)
 
 | SM-ID | Scenario | Thời gian ước tính |
@@ -490,7 +477,7 @@ Vì reviewStatus đã approved → publish thẳng.
 
 - [ ] Setup environment (mục 4 trong README)
 - [ ] Seed test data (`seedTestData.js --apply`)
-- [ ] Chạy test case P1 theo thứ tự module M1 → M18
+- [ ] Chạy test case P1 theo thứ tự module M1 → M17
 - [ ] Log bug theo template `BUG_REPORT_TEMPLATE.md`
 - [ ] Tổng kết trạng thái Pass/Fail/Blocked
 - [ ] Chạy smoke suite sau mỗi hotfix
@@ -498,4 +485,4 @@ Vì reviewStatus đã approved → publish thẳng.
 
 ---
 
-_Tổng: ~127 test case. Ước tính effort: **5–7 ngày** cho 1 tester full-time · **3–4 ngày** cho 2 tester._
+_Tổng: ~124 test case. Ước tính effort: **5–7 ngày** cho 1 tester full-time · **3–4 ngày** cho 2 tester._
