@@ -1,12 +1,16 @@
 import express from "express";
 import passport from "passport";
-import { isAuthenticated } from "../middleware/isAuthenticated.js"; // Import the middleware
+import { authLimiter } from "../middleware/rateLimit.js";
 
 const router = express.Router();
+
+const getFrontendBaseUrl = () =>
+  (process.env.FRONTEND_BASE_URL || "http://localhost:5173").replace(/\/$/, "");
 
 // Route đăng nhập với Google
 router.get(
   "/google",
+  authLimiter,
   passport.authenticate("google", {
     scope: ["profile", "email"],
   }),
@@ -15,11 +19,12 @@ router.get(
 // Callback route sau khi xác thực với Google
 router.get(
   "/google/callback",
+  authLimiter,
   passport.authenticate("google", {
     failureRedirect: "/login",
   }),
   (req, res) => {
-    res.redirect("http://localhost:5173"); // Redirect sau khi đăng nhập thành công
+    res.redirect(getFrontendBaseUrl());
   },
 );
 
@@ -29,17 +34,16 @@ router.get("/current_user", (req, res) => {
     return res.status(200).json(null);
   }
 
-  console.log("User information:", req.user);
   return res.status(200).json(req.user);
 });
 
 // Đăng xuất
-router.get("/logout", (req, res) => {
+router.get("/logout", (req, res, next) => {
   req.logout((err) => {
     if (err) {
       return next(err);
     }
-    res.redirect("http://localhost:5173"); // Đường dẫn khi đăng xuất
+    res.redirect(getFrontendBaseUrl());
   });
 });
 
