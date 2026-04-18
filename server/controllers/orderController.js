@@ -343,7 +343,6 @@ export const createVnpayPaymentUrl = async (req, res) => {
 
     const amount = Math.round(Number(order.amount) * 100);
     const createDate = formatDate(new Date());
-    const expireDate = formatDate(new Date(Date.now() + 15 * 60 * 1000));
     // Reuse txnRef nếu đã có để tránh mất giao dịch khi user bấm thanh toán lại.
     // Chỉ sinh mới khi order chưa từng khởi tạo URL thanh toán.
     const txnRef =
@@ -367,22 +366,24 @@ export const createVnpayPaymentUrl = async (req, res) => {
         .replace(/đ/g, "d")
         .replace(/Đ/g, "D");
 
+    // Khớp tuyệt đối với VNPay Node.js sample code (github.com/vnpay/sample-code).
+    // KHÔNG include vnp_ExpireDate — không có trong sample, một số sandbox merchant
+    // reject signature khi có field này.
     const params = {
       vnp_Version: VNPAY_VERSION,
       vnp_Command: VNPAY_COMMAND,
       vnp_TmnCode: tmnCode,
-      vnp_Amount: amount,
-      vnp_CreateDate: createDate,
-      vnp_CurrCode: VNPAY_CURR_CODE,
-      vnp_IpAddr: getClientIp(req),
       vnp_Locale: VNPAY_LOCALE,
+      vnp_CurrCode: VNPAY_CURR_CODE,
+      vnp_TxnRef: txnRef,
       vnp_OrderInfo: stripDiacritics(
         `Thanh toan khoa hoc ${order.courseName || ""}`,
       ).slice(0, 255),
       vnp_OrderType: VNPAY_ORDER_TYPE,
+      vnp_Amount: amount,
       vnp_ReturnUrl: returnUrl,
-      vnp_TxnRef: txnRef,
-      vnp_ExpireDate: expireDate,
+      vnp_IpAddr: getClientIp(req),
+      vnp_CreateDate: createDate,
     };
 
     const sortedParams = sortObjectByKey(params);
@@ -399,6 +400,8 @@ export const createVnpayPaymentUrl = async (req, res) => {
       {
         orderId: String(order._id),
         tmnCode,
+        tmnCodeLength: tmnCode.length,
+        secretLength: hashSecret.length,
         ipAddr: params.vnp_IpAddr,
         signDataLength: signData.length,
         signDataPreview: signData.slice(0, 200),
@@ -407,7 +410,19 @@ export const createVnpayPaymentUrl = async (req, res) => {
       "VNPay payment URL built",
     );
 
-    return res.json({ success: true, paymentUrl, orderId: order._id });
+    const response = { success: true, paymentUrl, orderId: order._id };
+    // Dev-mode: trả signData + signature để tester verify thủ công.
+    if (process.env.NODE_ENV !== "production") {
+      response.debug = {
+        signData,
+        signature,
+        tmnCodeLength: tmnCode.length,
+        secretLength: hashSecret.length,
+        ipAddr: params.vnp_IpAddr,
+        paramsCount: Object.keys(sortedParams).length,
+      };
+    }
+    return res.json(response);
   } catch (error) {
     logger.error({ err: error }, "Error creating VNPay URL");
     return res
