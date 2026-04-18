@@ -149,21 +149,19 @@
     }
   };
 
-  // Backend giờ trả về populated item (sections.items.itemId là object có name).
-  // Chỉ fallback gọi getItem nếu thiếu (giữ tương thích với dữ liệu cũ).
+  // Backend trả về populated data ở `item.itemData` (giữ `item.itemId` là string
+  // để FE routing/xóa/toggle không bị break). Chỉ fallback gọi getItem nếu thiếu.
   const hydrateSectionItemNames = async (sections = []) => {
     await Promise.all(
       sections.map(async (section) => {
         if (!Array.isArray(section.items)) return;
         await Promise.all(
           section.items.map(async (item) => {
-            const populated = item.itemId;
+            const populated = item.itemData;
             if (populated && typeof populated === "object" && populated.name) {
               item.name = populated.name;
               item.isPreview = !!populated.isPreview;
               item.isLocked = !!populated.isLocked;
-              // Chuẩn hóa itemId về string để link điều hướng không đổi.
-              item.itemId = populated._id || populated.id || item.itemId;
               return;
             }
             item.name = await getItemName(item);

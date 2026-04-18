@@ -85,7 +85,9 @@ const sanitizeLesson = (lesson) => {
 /**
  * Sanitize course doc sao cho các lesson/assignment không được truy cập bị strip content.
  * Những item có isPreview=true vẫn giữ full content.
- * Trả về plain object (không phải mongoose doc).
+ *
+ * LƯU Ý: strip dữ liệu trong `item.itemData` (populated doc),
+ * KHÔNG đụng `item.itemId` (string ID — FE cần để routing/delete/visibility).
  */
 export const sanitizeCourseForViewer = (course, access) => {
   if (!course) return course;
@@ -95,7 +97,6 @@ export const sanitizeCourseForViewer = (course, access) => {
     return plain;
   }
 
-  // Không có quyền → duyệt từng section.items.itemId và strip.
   if (!Array.isArray(plain.sections)) return plain;
 
   plain.sections = plain.sections.map((section) => {
@@ -103,19 +104,18 @@ export const sanitizeCourseForViewer = (course, access) => {
     return {
       ...section,
       items: items.map((item) => {
-        const itemDoc = item.itemId;
+        const itemDoc = item.itemData;
         if (!itemDoc || typeof itemDoc !== "object") {
           return item;
         }
         if (item.itemType === "lesson") {
-          // Bài preview vẫn cho xem đầy đủ.
           if (itemDoc.isPreview) {
-            return item;
+            return item; // preview giữ nguyên
           }
-          return { ...item, itemId: sanitizeLesson(itemDoc) };
+          return { ...item, itemData: sanitizeLesson(itemDoc) };
         }
         if (item.itemType === "assignment") {
-          return { ...item, itemId: sanitizeAssignment(itemDoc) };
+          return { ...item, itemData: sanitizeAssignment(itemDoc) };
         }
         return item;
       }),

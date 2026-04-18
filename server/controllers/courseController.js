@@ -606,11 +606,15 @@ export const deleteCourse = async (req, res) => {
 // GET functions for Courses
 // ------------------------------------
 
-// Manual batch-populate sections.items.itemId.
-// LÝ DO: itemSchema dùng `refPath: "itemType"` với giá trị "lesson"/"assignment" lowercase,
-// nhưng model đăng ký là "Lesson"/"Assignment" (case-sensitive). Mongoose populate
-// silently fail và trả itemId vẫn là ObjectId string → FE hiển thị "Unknown Item".
+// Manual batch-populate sections.items.
+// LÝ DO: itemSchema dùng `refPath: "itemType"` với giá trị "lesson"/"assignment"
+// lowercase, nhưng model đăng ký là "Lesson"/"Assignment" (case-sensitive).
+// Mongoose populate silently fail → itemId vẫn là ObjectId string.
 // 2 query batch thay cho populate để hoạt động bất chấp case mismatch.
+//
+// QUAN TRỌNG: KHÔNG replace item.itemId (vẫn giữ là string ID để các page FE
+// cũ dùng cho routing/xóa/toggle visibility không bị break). Thay vào đó, lưu
+// populated doc vào item.itemData — FE đọc name/content từ đây.
 const populateSectionItems = async (course) => {
   if (!course?.sections?.length) return course;
 
@@ -647,7 +651,10 @@ const populateSectionItems = async (course) => {
           : item.itemType === "assignment"
             ? assignmentMap.get(key)
             : null;
-      if (doc) item.itemId = doc;
+      if (doc) {
+        item.itemData = doc;
+        item.itemId = key; // chuẩn hóa về string (đề phòng ObjectId)
+      }
     }
   }
 
