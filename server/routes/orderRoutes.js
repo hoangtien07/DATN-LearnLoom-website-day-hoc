@@ -9,8 +9,6 @@ import {
   createVnpayPaymentUrl,
   handleVnpayIpn,
   handleVnpayReturn,
-  handleVnpayMockPage,
-  handleVnpayMockResolve,
   getOrderPaymentStatus,
 } from "../controllers/orderController.js";
 import {
@@ -32,10 +30,6 @@ router.post(
 router.get("/payment/status/:orderId", isAuthenticated, getOrderPaymentStatus);
 router.get("/payment/vnpay-ipn", handleVnpayIpn);
 router.get("/payment/vnpay-return", handleVnpayReturn);
-
-// MOCK mode (VNPAY_MOCK_MODE=true) — dev-only, KHÔNG bật production.
-router.get("/payment/mock/:orderId", handleVnpayMockPage);
-router.get("/payment/mock/:orderId/resolve", handleVnpayMockResolve);
 
 // Student xem đơn hàng của chính mình (LUỒNG 3).
 router.get("/mine", isAuthenticated, getMyOrders);
