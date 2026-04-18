@@ -166,12 +166,8 @@
               item.itemId = populated._id || populated.id || item.itemId;
               return;
             }
-            try {
-              item.name = await getItemName(item);
-            } catch (err) {
-              item.name = "Nội dung khóa học";
-              item.isLocked = true;
-            }
+            item.name = await getItemName(item);
+            item.isLocked = true; // Thiếu populated data → coi như locked (BR-01 gate).
           }),
         );
       }),
@@ -245,14 +241,19 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Lấy tên của bài học hoặc bài tập từ item ID
+  // Fallback name theo loại khi BE không trả populated data (hiếm).
+  const fallbackName = (itemType) =>
+    itemType === "assignment" ? "Bài kiểm tra" : "Bài học";
+
+  // Lấy tên qua getItem — chỉ dùng khi populated data thiếu (VD course cũ data dirty).
+  // Với guest / chưa enrolled → API trả 401/403 → dùng fallback tên chung.
   const getItemName = async (item) => {
     try {
       const response = await getItem(item.itemType, item.itemId);
-      return response.name;
+      return response?.name || fallbackName(item.itemType);
     } catch (error) {
-      console.error("Error fetching item name:", error);
-      return "Unknown Item";
+      // 401/403 là hành vi đúng của BR-01 — không phải bug. Im lặng fallback.
+      return fallbackName(item.itemType);
     }
   };
 

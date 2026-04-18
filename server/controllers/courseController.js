@@ -606,24 +606,67 @@ export const deleteCourse = async (req, res) => {
 // GET functions for Courses
 // ------------------------------------
 
+// Manual batch-populate sections.items.itemId.
+// LÝ DO: itemSchema dùng `refPath: "itemType"` với giá trị "lesson"/"assignment" lowercase,
+// nhưng model đăng ký là "Lesson"/"Assignment" (case-sensitive). Mongoose populate
+// silently fail và trả itemId vẫn là ObjectId string → FE hiển thị "Unknown Item".
+// 2 query batch thay cho populate để hoạt động bất chấp case mismatch.
+const populateSectionItems = async (course) => {
+  if (!course?.sections?.length) return course;
+
+  const lessonIds = [];
+  const assignmentIds = [];
+
+  for (const section of course.sections) {
+    if (!Array.isArray(section.items)) continue;
+    for (const item of section.items) {
+      if (!item.itemId) continue;
+      if (item.itemType === "lesson") lessonIds.push(item.itemId);
+      else if (item.itemType === "assignment") assignmentIds.push(item.itemId);
+    }
+  }
+
+  const [lessons, assignments] = await Promise.all([
+    lessonIds.length ? Lesson.find({ _id: { $in: lessonIds } }).lean() : [],
+    assignmentIds.length
+      ? Assignment.find({ _id: { $in: assignmentIds } }).lean()
+      : [],
+  ]);
+
+  const lessonMap = new Map(lessons.map((l) => [String(l._id), l]));
+  const assignmentMap = new Map(assignments.map((a) => [String(a._id), a]));
+
+  for (const section of course.sections) {
+    if (!Array.isArray(section.items)) continue;
+    for (const item of section.items) {
+      if (!item.itemId) continue;
+      const key = String(item.itemId);
+      const doc =
+        item.itemType === "lesson"
+          ? lessonMap.get(key)
+          : item.itemType === "assignment"
+            ? assignmentMap.get(key)
+            : null;
+      if (doc) item.itemId = doc;
+    }
+  }
+
+  return course;
+};
+
 // Get course by slug
 // Sanitize content của lesson/assignment khi user chưa có quyền xem (guest, chưa enroll).
 export const getCourseBySlug = async (req, res) => {
   try {
-    const course = await Course.findOne({ slug: req.params.slug }).populate([
-      {
-        path: "sections.items.itemId",
-        options: { discriminatorKey: "type" },
-        populate: {
-          path: "questions.answers", // Assuming questions belong to assignments
-        },
-      },
-      { path: "teacher" },
-    ]);
+    const course = await Course.findOne({ slug: req.params.slug })
+      .populate("teacher")
+      .lean();
 
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
+
+    await populateSectionItems(course);
 
     const access = await resolveCourseAccess(course, req.user || null);
     const payload = sanitizeCourseForViewer(course, access);
@@ -634,6 +677,7 @@ export const getCourseBySlug = async (req, res) => {
 
     res.json(payload);
   } catch (error) {
+    logger.error({ err: error }, "Error fetching course by slug");
     res.status(500).json({ error: error.message });
   }
 };
@@ -764,16 +808,19 @@ export const getSectionsByCourseSlug = async (req, res) => {
 
     const course = await Course.findOne({ slug })
       .populate("teacher", "_id")
-      .populate("sections.items.itemId");
+      .lean();
 
     if (!course) {
       return res.status(404).json({ message: "Section not found" });
     }
 
+    await populateSectionItems(course);
+
     const access = await resolveCourseAccess(course, req.user || null);
     const payload = sanitizeCourseForViewer(course, access);
     res.json(payload.sections);
   } catch (error) {
+    logger.error({ err: error }, "Error fetching sections by course slug");
     res.status(500).json({ error: error.message });
   }
 };
