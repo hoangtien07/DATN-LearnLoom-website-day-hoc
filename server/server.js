@@ -70,7 +70,9 @@ app.use(
   }),
 );
 
-connectDB();
+// Chờ DB connect xong mới mount routes + listen — tránh Mongoose
+// buffering timeout khi request đến lúc connection chưa sẵn sàng.
+await connectDB();
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 app.use(bodyParser.json());
