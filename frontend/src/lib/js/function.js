@@ -8,8 +8,9 @@ export const getTime = (time) => {
   return formattedDate;
 };
 
-// Hàm lấy id của video Youtube
+// Hàm lấy id của video Youtube — null-safe (url có thể undefined khi course chưa set overviewVideo).
 export const getYoutubeVideoId = (url) => {
+  if (!url || typeof url !== "string") return null;
   const regex = /(?:\/|%3D|v=)([0-9A-Za-z_-]{11})(?:\S+)?/;
   const match = url.match(regex);
   return match ? match[1] : null;

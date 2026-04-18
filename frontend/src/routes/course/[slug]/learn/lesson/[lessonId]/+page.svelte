@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { getItem } from "$lib/js/api";
+  import { getYoutubeVideoId } from "$lib/js/function";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
 
@@ -46,13 +47,6 @@
   onMount(() => {
     if (lessonId) loadLesson(lessonId);
   });
-
-  // Hàm lấy id của video Youtube
-  function getYoutubeVideoId(url) {
-    const regex = /(?:\/|%3D|v=)([0-9A-Za-z_-]{11})(?:\S+)?/;
-    const match = url.match(regex);
-    return match ? match[1] : null;
-  }
 </script>
 
 {#if isLoading}
@@ -89,7 +83,7 @@
         <p class="lesson-empty">Bài học này chưa có nội dung.</p>
       {/if}
     {:else if lesson.type === "VideoLesson"}
-      {#if lesson.videoUrl}
+      {#if lesson.videoUrl && getYoutubeVideoId(lesson.videoUrl)}
         <div class="media-wrapper">
           <iframe
             src="https://www.youtube.com/embed/{getYoutubeVideoId(
@@ -101,6 +95,10 @@
             allowfullscreen
           ></iframe>
         </div>
+      {:else if lesson.videoUrl}
+        <p class="lesson-empty">
+          Video URL không hợp lệ (chỉ hỗ trợ link YouTube).
+        </p>
       {:else}
         <p class="lesson-empty">Bài học này chưa có nội dung.</p>
       {/if}
