@@ -9,6 +9,8 @@
     deleteItem,
     fetchCourseBySlug,
     toggleLessonVisibility,
+    reorderSections,
+    reorderItemsInSection,
   } from "$lib/js/api";
   import {
     Button,
@@ -20,6 +22,8 @@
   } from "@sveltestrap/sveltestrap";
   import { pushToast } from "$lib/stores/toast.js";
   import { confirm as uiConfirm } from "$lib/stores/confirm.js";
+  import { dndzone, SOURCES, TRIGGERS } from "svelte-dnd-action";
+  import { flip } from "svelte/animate";
 
   export let course;
   const dispatch = createEventDispatcher();
@@ -34,6 +38,166 @@
   let statusVariant = "";
   let itemsHydrateKey = "";
   let isHydratingItems = false;
+  const FLIP_MS = 220;
+  let isReorderingSections = false;
+  // Map sectionId → boolean để lock từng section khi API đang chạy.
+  let reorderingItemsIn = {};
+  // Snapshot sections trước khi drag để rollback nếu API fail.
+  let sectionsSnapshot = null;
+  // Snapshot items của từng section.
+  let itemsSnapshotBySection = {};
+
+  // Svelte-dnd-action yêu cầu mỗi phần tử có `id`. Mongoose trả `_id`;
+  // reactive sync để `id` luôn khớp _id (không mutate lần 2 nếu đã set).
+  const ensureDndIds = (c) => {
+    if (!c?.sections) return;
+    for (const section of c.sections) {
+      if (!section.id) section.id = String(section._id);
+      if (Array.isArray(section.items)) {
+        for (const item of section.items) {
+          if (!item.id)
+            item.id = `${section._id}-${item._id || item.itemId || ""}`;
+        }
+      }
+    }
+  };
+  $: ensureDndIds(course);
+
+  // Tìm startIndex/endIndex từ old vs new array (1 phần tử di chuyển).
+  const findMoveIndices = (oldArr, newArr, idKey = "id") => {
+    const newIds = newArr.map((x) => String(x[idKey]));
+    const oldIds = oldArr.map((x) => String(x[idKey]));
+    for (let i = 0; i < newIds.length; i++) {
+      if (newIds[i] !== oldIds[i]) {
+        const startIndex = oldIds.indexOf(newIds[i]);
+        if (startIndex === -1) return null;
+        return { startIndex, endIndex: i };
+      }
+    }
+    return null;
+  };
+
+  // ============================================================
+  // Drag-drop handlers (svelte-dnd-action)
+  // ============================================================
+  // SECTIONS
+  const onSectionsConsider = (e) => {
+    // Snapshot thứ tự cũ khi bắt đầu drag (trigger DRAGGED_ENTERED or OUT).
+    if (
+      !sectionsSnapshot &&
+      e.detail.info.trigger === TRIGGERS.DRAG_STARTED
+    ) {
+      sectionsSnapshot = course.sections.map((s) => ({ ...s }));
+    }
+    // Update local order để animation + placeholder hiển thị.
+    course.sections = e.detail.items;
+  };
+
+  const onSectionsFinalize = async (e) => {
+    const newSections = e.detail.items;
+    course.sections = newSections;
+
+    // Chỉ commit khi drop do user thực hiện (không phải SOURCE.API).
+    if (e.detail.info.source !== SOURCES.POINTER) {
+      sectionsSnapshot = null;
+      return;
+    }
+
+    const snapshot = sectionsSnapshot;
+    sectionsSnapshot = null;
+    if (!snapshot) return;
+
+    const move = findMoveIndices(snapshot, newSections, "id");
+    if (!move || move.startIndex === move.endIndex) return;
+
+    if (isReorderingSections) return; // guard race
+    isReorderingSections = true;
+    try {
+      await reorderSections(course.slug, move.startIndex, move.endIndex);
+      pushToast("Đã cập nhật thứ tự chương.", { variant: "success" });
+    } catch (err) {
+      console.error("Error reordering sections:", err);
+      // Rollback về snapshot nếu API fail.
+      course.sections = snapshot;
+      pushToast(
+        err?.response?.data?.message ||
+          "Không lưu được thứ tự chương. Đã hoàn tác.",
+        { variant: "error" },
+      );
+    } finally {
+      isReorderingSections = false;
+    }
+  };
+
+  // ITEMS trong 1 section
+  const onItemsConsider = (sectionId) => (e) => {
+    if (
+      !itemsSnapshotBySection[sectionId] &&
+      e.detail.info.trigger === TRIGGERS.DRAG_STARTED
+    ) {
+      const section = course.sections.find((s) => s.id === sectionId);
+      if (section) {
+        itemsSnapshotBySection = {
+          ...itemsSnapshotBySection,
+          [sectionId]: section.items.map((i) => ({ ...i })),
+        };
+      }
+    }
+    // Update local items.
+    course.sections = course.sections.map((s) =>
+      s.id === sectionId ? { ...s, items: e.detail.items } : s,
+    );
+  };
+
+  const onItemsFinalize = (sectionId) => async (e) => {
+    const newItems = e.detail.items;
+    course.sections = course.sections.map((s) =>
+      s.id === sectionId ? { ...s, items: newItems } : s,
+    );
+
+    if (e.detail.info.source !== SOURCES.POINTER) {
+      itemsSnapshotBySection = {
+        ...itemsSnapshotBySection,
+        [sectionId]: undefined,
+      };
+      return;
+    }
+
+    const snapshot = itemsSnapshotBySection[sectionId];
+    itemsSnapshotBySection = {
+      ...itemsSnapshotBySection,
+      [sectionId]: undefined,
+    };
+    if (!snapshot) return;
+
+    const move = findMoveIndices(snapshot, newItems, "id");
+    if (!move || move.startIndex === move.endIndex) return;
+
+    if (reorderingItemsIn[sectionId]) return;
+    reorderingItemsIn = { ...reorderingItemsIn, [sectionId]: true };
+    try {
+      await reorderItemsInSection(
+        course.slug,
+        sectionId,
+        move.startIndex,
+        move.endIndex,
+      );
+      pushToast("Đã cập nhật thứ tự nội dung.", { variant: "success" });
+    } catch (err) {
+      console.error("Error reordering items:", err);
+      // Rollback.
+      course.sections = course.sections.map((s) =>
+        s.id === sectionId ? { ...s, items: snapshot } : s,
+      );
+      pushToast(
+        err?.response?.data?.message ||
+          "Không lưu được thứ tự nội dung. Đã hoàn tác.",
+        { variant: "error" },
+      );
+    } finally {
+      reorderingItemsIn = { ...reorderingItemsIn, [sectionId]: false };
+    }
+  };
 
   const showLessonTypeDialog = async (sectionIndex) => {
     currentSectionIndex = sectionIndex;
@@ -46,7 +210,7 @@
     selectedLessonType = type;
   };
 
-  const handleCreateLesson = async (sectionIndex) => {
+  const handleCreateLesson = async () => {
     if (!selectedLessonType || newLessonName.trim() === "") {
       setStatus("Vui lòng chọn loại bài học và nhập tên.", "error");
       return;
@@ -71,16 +235,6 @@
     } catch (error) {
       console.error("Error adding item:", error);
       setStatus("Không thể thêm nội dung. Vui lòng thử lại.", "error");
-    }
-  };
-
-  const getItemName = async (itemType, itemId) => {
-    try {
-      const response = await getItem(itemType, itemId);
-      return response.name;
-    } catch (error) {
-      console.error("Error fetching item name:", error);
-      return "Unknown Item";
     }
   };
 
@@ -355,94 +509,140 @@
     <p class={`course-edit-status ${statusVariant}`}>{statusMessage}</p>
   {/if}
 
-  {#each course.sections as section, sectionIndex}
-    <article class="section" data-index={sectionIndex}>
-      <div class="section-head">
-        {#if editingSectionId === section._id}
-          <input
-            type="text"
-            class="course-edit-input section-name-input"
-            bind:value={section.name}
-            on:blur={() => handleSaveSectionName(section._id, section.name)}
-            on:keydown={(event) => {
-              if (event.key === "Enter") {
-                handleSaveSectionName(section._id, section.name);
-              }
-            }}
-          />
-        {:else}
-          <h3>{section.name}</h3>
-        {/if}
-        <div class="section-actions">
-          <Button
-            on:click={() => handleEditSection(section._id)}
-            outline
-            size="sm"
-            color="info">Sửa</Button
+  <div
+    class="sections-dnd"
+    use:dndzone={{
+      items: course.sections || [],
+      flipDurationMs: FLIP_MS,
+      type: "section",
+      dragDisabled: isReorderingSections || !!editingSectionId,
+      dropTargetStyle: {},
+    }}
+    on:consider={onSectionsConsider}
+    on:finalize={onSectionsFinalize}
+  >
+    {#each course.sections as section, sectionIndex (section.id)}
+      <article
+        class="section"
+        data-index={sectionIndex}
+        animate:flip={{ duration: FLIP_MS }}
+      >
+        <div class="section-head">
+          <span
+            class="drag-handle"
+            aria-label="Kéo để sắp xếp lại chương"
+            title="Kéo để sắp xếp"
           >
-          <Button
-            on:click={() => handleDeleteSection(section)}
-            outline
-            size="sm"
-            color="danger">Xóa</Button
-          >
-        </div>
-      </div>
-
-      <ul class="item-list">
-        {#each section.items as item, itemIndex}
-          <li class:item-hidden={itemVisible[item.itemId] === false}>
-            <button
-              type="button"
-              class="item"
-              on:click={() => handleSelectLesson(item)}
-            >
-              <span>
-                {itemNames[item.itemId] || "Đang tải..."}
-                {#if itemVisible[item.itemId] === false}
-                  <span class="hidden-tag">ẩn</span>
-                {/if}
-              </span>
-              <small>{item.itemType === "lesson" ? "Bài học" : "Bài tập"}</small
-              >
-            </button>
-
-            <button
-              type="button"
-              class="item-vis-btn {itemVisible[item.itemId] === false
-                ? 'is-hidden'
-                : ''}"
-              title={itemVisible[item.itemId] === false
-                ? "Đang ẩn – Nhấn để hiện"
-                : "Đang hiện – Nhấn để ẩn"}
-              on:click={() => handleToggleItemVisibility(item)}
-            >
-              {#if itemVisible[item.itemId] === false}
-                <i class="bi bi-eye-slash"></i>
-              {:else}
-                <i class="bi bi-eye"></i>
-              {/if}
-            </button>
-
+            <i class="bi bi-grip-vertical" aria-hidden="true"></i>
+          </span>
+          {#if editingSectionId === section._id}
+            <input
+              type="text"
+              class="course-edit-input section-name-input"
+              bind:value={section.name}
+              on:blur={() => handleSaveSectionName(section._id, section.name)}
+              on:keydown={(event) => {
+                if (event.key === "Enter") {
+                  handleSaveSectionName(section._id, section.name);
+                }
+              }}
+            />
+          {:else}
+            <h3>{section.name}</h3>
+          {/if}
+          <div class="section-actions">
             <Button
-              on:click={() => handleDeleteItem(section._id, item)}
+              on:click={() => handleEditSection(section._id)}
+              outline
+              size="sm"
+              color="info">Sửa</Button
+            >
+            <Button
+              on:click={() => handleDeleteSection(section)}
               outline
               size="sm"
               color="danger">Xóa</Button
             >
-          </li>
-        {/each}
-      </ul>
-      <div class="section-footer">
-        <Button
-          on:click={() => addLesson(sectionIndex)}
-          outline
-          size="sm"
-          color="primary">Thêm bài học / bài tập</Button
+          </div>
+        </div>
+
+        <ul
+          class="item-list"
+          use:dndzone={{
+            items: section.items || [],
+            flipDurationMs: FLIP_MS,
+            type: `items-${section.id}`,
+            dragDisabled: !!reorderingItemsIn[section.id],
+            dropTargetStyle: {},
+          }}
+          on:consider={onItemsConsider(section.id)}
+          on:finalize={onItemsFinalize(section.id)}
         >
-      </div>
-    </article>
-  {/each}
+          {#each section.items as item (item.id)}
+            <li
+              class:item-hidden={itemVisible[item.itemId] === false}
+              animate:flip={{ duration: FLIP_MS }}
+            >
+              <span
+                class="drag-handle item-drag-handle"
+                aria-label="Kéo để sắp xếp"
+                title="Kéo để sắp xếp"
+              >
+                <i class="bi bi-grip-vertical" aria-hidden="true"></i>
+              </span>
+              <button
+                type="button"
+                class="item"
+                on:click={() => handleSelectLesson(item)}
+              >
+                <span>
+                  {itemNames[item.itemId] || "Đang tải..."}
+                  {#if itemVisible[item.itemId] === false}
+                    <span class="hidden-tag">ẩn</span>
+                  {/if}
+                </span>
+                <small
+                  >{item.itemType === "lesson" ? "Bài học" : "Bài tập"}</small
+                >
+              </button>
+
+              <button
+                type="button"
+                class="item-vis-btn {itemVisible[item.itemId] === false
+                  ? 'is-hidden'
+                  : ''}"
+                title={itemVisible[item.itemId] === false
+                  ? "Đang ẩn – Nhấn để hiện"
+                  : "Đang hiện – Nhấn để ẩn"}
+                on:click={() => handleToggleItemVisibility(item)}
+              >
+                {#if itemVisible[item.itemId] === false}
+                  <i class="bi bi-eye-slash"></i>
+                {:else}
+                  <i class="bi bi-eye"></i>
+                {/if}
+              </button>
+
+              <Button
+                on:click={() => handleDeleteItem(section._id, item)}
+                outline
+                size="sm"
+                color="danger">Xóa</Button
+              >
+            </li>
+          {/each}
+        </ul>
+        <div class="section-footer">
+          <Button
+            on:click={() => addLesson(sectionIndex)}
+            outline
+            size="sm"
+            color="primary">Thêm bài học / bài tập</Button
+          >
+        </div>
+      </article>
+    {/each}
+  </div>
 
   {#if !course.sections?.length}
     <div class="course-edit-empty">
@@ -498,6 +698,39 @@
 
   .section-name-input {
     max-width: 60%;
+  }
+
+  /* Drag handle — visual affordance cho drag-drop */
+  .drag-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    min-width: 20px;
+    color: #94a3b8;
+    cursor: grab;
+    font-size: 1rem;
+    transition: color 0.15s;
+  }
+  .drag-handle:hover {
+    color: #2563eb;
+  }
+  .drag-handle:active {
+    cursor: grabbing;
+  }
+  .item-drag-handle {
+    padding-top: 0.45rem;
+  }
+
+  /* Container DnD — highlight khi drop target active */
+  .sections-dnd,
+  .item-list {
+    list-style: none;
+  }
+  :global(.sections-dnd.dragged-over),
+  :global(.item-list.dragged-over) {
+    background: rgba(37, 99, 235, 0.04);
+    border-radius: 10px;
   }
 
   .item-list {

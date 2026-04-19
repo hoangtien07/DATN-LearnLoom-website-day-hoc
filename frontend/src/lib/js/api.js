@@ -364,6 +364,29 @@ export const deleteSection = async (slug, sectionId) => {
   }
 };
 
+// Kéo-thả sắp xếp lại thứ tự chương.
+export const reorderSections = async (slug, startIndex, endIndex) => {
+  const response = await apiClient.put(
+    `/api/courses/${slug}/sections/reorder`,
+    { startIndex, endIndex },
+  );
+  return response.data;
+};
+
+// Kéo-thả sắp xếp item trong 1 chương.
+export const reorderItemsInSection = async (
+  slug,
+  sectionId,
+  startIndex,
+  endIndex,
+) => {
+  const response = await apiClient.put(
+    `/api/courses/${slug}/sections/${sectionId}/reorder`,
+    { startIndex, endIndex },
+  );
+  return response.data;
+};
+
 // --- Item Functions ---
 
 export const addItemToSection = async (slug, sectionId, itemData) => {

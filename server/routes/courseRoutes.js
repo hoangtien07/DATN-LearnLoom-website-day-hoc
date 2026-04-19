@@ -117,8 +117,21 @@ router.put(
   checkRoles(["admin", "instructor"]),
   toggleLessonVisibility,
 );
-// router.put("/:slug/sections/reorder", reorderSections);
-// router.put("/:slug/sections/:sectionId/reorder", reorderItemsInSection);
+// Kéo-thả sắp xếp lại thứ tự chương (drag-drop).
+// Instructor chỉ reorder course của mình (filter trong controller).
+router.put(
+  "/:slug/sections/reorder",
+  isAuthenticated,
+  checkRoles(["admin", "instructor"]),
+  reorderSections,
+);
+// Kéo-thả sắp xếp item trong một chương.
+router.put(
+  "/:slug/sections/:sectionId/reorder",
+  isAuthenticated,
+  checkRoles(["admin", "instructor"]),
+  reorderItemsInSection,
+);
 // Cập nhật tên chương
 router.put("/:slug/sections/:sectionId", updateSection);
 // Cập nhật tiến độ khóa học

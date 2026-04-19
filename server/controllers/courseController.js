@@ -899,18 +899,46 @@ const moveArrayItem = (arr, fromIndex, toIndex) => {
 export const reorderSections = async (req, res) => {
   try {
     const { slug } = req.params;
-    const { startIndex, endIndex } = req.body;
+    const startIndex = Number(req.body.startIndex);
+    const endIndex = Number(req.body.endIndex);
 
-    const course = await Course.findOne({ slug });
+    if (!Number.isInteger(startIndex) || !Number.isInteger(endIndex)) {
+      return res
+        .status(400)
+        .json({ message: "startIndex và endIndex phải là số nguyên" });
+    }
+
+    // Instructor chỉ reorder course của mình; admin full access.
+    const filter = { slug, is_deleted: { $ne: true } };
+    if (req.user?.role === "instructor") {
+      filter.teacher = req.user._id;
+    }
+
+    const course = await Course.findOne(filter);
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    course.sections = moveArrayItem(course.sections, startIndex, endIndex);
-    await course.save();
+    const total = course.sections.length;
+    if (
+      startIndex < 0 ||
+      startIndex >= total ||
+      endIndex < 0 ||
+      endIndex >= total
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Index nằm ngoài phạm vi sections" });
+    }
+
+    if (startIndex !== endIndex) {
+      course.sections = moveArrayItem(course.sections, startIndex, endIndex);
+      await course.save();
+    }
 
     res.json(course.sections);
   } catch (error) {
+    logger.error({ err: error }, "Error reordering sections");
     res.status(500).json({ message: error.message });
   }
 };
@@ -1185,10 +1213,21 @@ export const deleteItem = async (req, res) => {
 export const reorderItemsInSection = async (req, res) => {
   try {
     const { slug, sectionId } = req.params;
-    const { startIndex, endIndex } = req.body;
+    const startIndex = Number(req.body.startIndex);
+    const endIndex = Number(req.body.endIndex);
 
-    const course = await Course.findOne({ slug });
+    if (!Number.isInteger(startIndex) || !Number.isInteger(endIndex)) {
+      return res
+        .status(400)
+        .json({ message: "startIndex và endIndex phải là số nguyên" });
+    }
 
+    const filter = { slug, is_deleted: { $ne: true } };
+    if (req.user?.role === "instructor") {
+      filter.teacher = req.user._id;
+    }
+
+    const course = await Course.findOne(filter);
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
@@ -1196,12 +1235,30 @@ export const reorderItemsInSection = async (req, res) => {
     const section = course.sections.id(sectionId);
     if (!section) return res.status(404).json({ message: "Section not found" });
 
-    section.items = moveArrayItem(section.items, startIndex, endIndex);
+    const total = section.items.length;
+    if (
+      startIndex < 0 ||
+      startIndex >= total ||
+      endIndex < 0 ||
+      endIndex >= total
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Index nằm ngoài phạm vi items" });
+    }
 
-    await course.save();
+    if (startIndex !== endIndex) {
+      section.items = moveArrayItem(section.items, startIndex, endIndex);
+      // Cập nhật lại order để đảm bảo thứ tự đúng sau khi reorder.
+      section.items.forEach((item, i) => {
+        item.order = i;
+      });
+      await course.save();
+    }
 
     res.json(section.items);
   } catch (error) {
+    logger.error({ err: error }, "Error reordering items in section");
     res.status(500).json({ message: error.message });
   }
 };
