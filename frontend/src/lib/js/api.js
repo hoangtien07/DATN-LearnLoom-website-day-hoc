@@ -188,7 +188,6 @@ export async function fetchFilteredCourses(filters) {
 // Tạo khóa học
 export const createCourse = async (course) => {
   try {
-    console.log(course);
     const response = await apiClient.post("/api/courses", course);
     return response.data;
   } catch (error) {
@@ -368,7 +367,6 @@ export const deleteSection = async (slug, sectionId) => {
 // --- Item Functions ---
 
 export const addItemToSection = async (slug, sectionId, itemData) => {
-  console.log(`/api/courses/${slug}/sections/${sectionId}/items`, itemData);
   try {
     const response = await apiClient.post(
       `/api/courses/${slug}/sections/${sectionId}/items`,
@@ -470,7 +468,6 @@ export const getSession = async (request) => {
 // Enroll in a course
 export const enrollCourse = async (slug, userId) => {
   try {
-    console.log(slug, userId);
     const response = await apiClient.post(
       `/api/courses/${slug}/${userId}/enroll`,
     );
@@ -516,10 +513,6 @@ export const addComment = async (
   content,
   courseId,
 ) => {
-  console.log(`/api/comments/${itemType}/${itemId}/${userId}`, {
-    content,
-    courseId,
-  });
   try {
     const response = await apiClient.post(
       `/api/comments/${itemType}/${itemId}/${userId}`,
@@ -528,8 +521,7 @@ export const addComment = async (
         courseId,
       },
     );
-    console.log(response.data);
-    return response.data; // Trả về bình luận mới tạo
+    return response.data;
   } catch (error) {
     console.error("Error adding comment:", error);
     throw error;
@@ -565,7 +557,6 @@ export const deleteComment = async (commentId) => {
 // Lấy trạng thái của bài tập
 export const getUserAssignmentStatus = async (userId, assignmentId) => {
   try {
-    console.log(`/api/courses/assignments/${assignmentId}/${userId}/status`);
     const response = await apiClient.get(
       `/api/courses/assignments/${assignmentId}/user/${userId}/status`,
     );
@@ -711,7 +702,6 @@ export const createOrder = async (req, res) => {
       courseId: req.courseId,
       redirectUrl: req.redirectUrl,
     };
-    console.log(data);
     const response = await apiClient.post(`/api/orders/create`, data);
     return response.data;
   } catch (error) {

@@ -1,5 +1,9 @@
+<script>
+  const year = new Date().getFullYear();
+</script>
+
 <footer class="d-flex- text-center">
-  © 2024 LearnLoom - Học mọi lúc, mọi nơi
+  © {year} LearnLoom - Học mọi lúc, mọi nơi
 </footer>
 
 <style>

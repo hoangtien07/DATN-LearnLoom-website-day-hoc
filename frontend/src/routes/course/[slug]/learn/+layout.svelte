@@ -47,8 +47,8 @@
   const getItemFallbackName = (sectionItem, index) => {
     const normalizedType = (sectionItem?.itemType || "lesson").toLowerCase();
     return normalizedType === "assignment"
-      ? `Bai tap ${index + 1}`
-      : `Bai hoc ${index + 1}`;
+      ? `Bài tập ${index + 1}`
+      : `Bài học ${index + 1}`;
   };
 
   const getDisplayItemName = (sectionItem, index) => {
