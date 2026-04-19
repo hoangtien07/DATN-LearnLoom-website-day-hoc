@@ -25,10 +25,5 @@
     "svelte-preprocess": "^6.0.2",
     "svelte-star-rating": "^2.0.1",
     "uuid": "^10.0.0"
-  },
-  "exports": {
-    ".": {
-      "svelte": "./dist/index.js"
-    }
   }
 }
