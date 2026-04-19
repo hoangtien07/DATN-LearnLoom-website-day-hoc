@@ -908,7 +908,7 @@
     <Modal isOpen={showCreateModal} toggle={toggleCreateModal} size="lg">
       <ModalHeader toggle={toggleCreateModal}>Tạo khóa học mới</ModalHeader>
       <ModalBody>
-        <form on:submit={handleCreateCourse}>
+        <form on:submit|preventDefault={handleCreateCourse}>
           <div class="instructor-form-grid">
             <div class="instructor-form-field">
               <label for="courseName">Tên khóa học</label>

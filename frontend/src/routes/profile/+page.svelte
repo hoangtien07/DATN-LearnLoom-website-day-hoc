@@ -124,7 +124,7 @@
     {/if}
 
     {#if editMode}
-      <form class="profile-card" on:submit={handleSubmit}>
+      <form class="profile-card" on:submit|preventDefault={handleSubmit}>
         <div class="profile-form-grid">
           <label class="profile-field" for="username">
             <span>Tên người dùng</span>
