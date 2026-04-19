@@ -440,39 +440,6 @@ export const getItem = async (itemType, itemId) => {
   }
 };
 
-// --- Reordering Functions ---
-
-export const reorderSections = async (slug, startIndex, endIndex) => {
-  try {
-    const response = await apiClient.put(
-      `/api/courses/${slug}/sections/reorder`,
-      {
-        startIndex,
-        endIndex,
-      },
-    );
-    return response.data;
-  } catch (error) {
-    console.error("Error reordering sections:", error);
-    throw error;
-  }
-};
-
-export const reorderItemsInSection = async (slug, sectionId, newOrder) => {
-  try {
-    const response = await apiClient.put(
-      `/api/courses/${slug}/sections/${sectionId}/reorder`,
-      {
-        newOrder,
-      },
-    );
-    return response.data;
-  } catch (error) {
-    console.error("Error reordering items in section:", error);
-    throw error;
-  }
-};
-
 // Sử dụng apiClient để lấy session
 export const getSession = async (request) => {
   try {
