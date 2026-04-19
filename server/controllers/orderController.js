@@ -331,16 +331,16 @@ export const createVnpayPaymentUrl = async (req, res) => {
     const amount = Math.round(Number(order.amount) * 100);
     const createDate = formatDate(new Date());
     const expireDate = formatDate(new Date(Date.now() + 15 * 60 * 1000));
-    // Reuse txnRef nếu đã có để tránh mất giao dịch khi user bấm thanh toán lại.
-    // Chỉ sinh mới khi order chưa từng khởi tạo URL thanh toán.
-    const txnRef =
-      order.paymentGatewayTxnRef ||
-      `ORD${order._id.toString().slice(-8)}${Date.now()}`;
+    // LUÔN sinh txnRef mới cho mỗi lần tạo URL thanh toán.
+    // VNPay coi txnRef là unique reference cho 1 transaction attempt và sẽ
+    // reject với lỗi "Giao dịch đang được xử lý hoặc đã quá thời gian" nếu
+    // txnRef trùng với lần submit trước đó (kể cả khi lần trước fail/timeout).
+    // Order vẫn được identify qua _id; paymentGatewayTxnRef chỉ dùng để match
+    // callback return/IPN gần nhất từ VNPay.
+    const txnRef = `ORD${order._id.toString().slice(-8)}${Date.now()}`;
     const returnUrl = `${getBackendBaseUrl()}/api/orders/payment/vnpay-return`;
 
-    if (!order.paymentGatewayTxnRef) {
-      order.paymentGatewayTxnRef = txnRef;
-    }
+    order.paymentGatewayTxnRef = txnRef;
     order.paymentStatus = "pending";
     order.failedAt = undefined;
     await order.save();
