@@ -177,9 +177,12 @@ export async function fetchFilteredCourses(filters) {
     query.append("prices", prices.join(","));
   }
 
-  console.log(`/api/courses?${query.toString()}`);
   const response = await apiClient.get(`/api/courses?${query.toString()}`);
-  return response.data;
+  // BE trả { data, pagination } sau khi thêm pagination; unwrap để FE cũ
+  // (trang /course consume array) không bị treo ở isLoading.
+  return Array.isArray(response.data)
+    ? response.data
+    : response.data?.data || [];
 }
 
 // Tạo khóa học

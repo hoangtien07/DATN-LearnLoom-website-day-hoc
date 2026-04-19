@@ -110,39 +110,43 @@
 
     isHydratingItems = true;
 
-    const entries = [];
+    // Lấy name/visible từ item.itemData (BE đã populate sẵn).
+    // Chỉ gọi getItem cho item thiếu data (hiếm — VD course mới thêm item,
+    // BE chưa refetch).
+    const nameEntries = [];
+    const visEntries = [];
+    const missingEntries = [];
+
     for (const section of course.sections) {
       for (const item of section.items || []) {
-        const key = item.itemId;
-        if (!itemNames[key]) {
-          entries.push([key, item.itemType]);
+        const id = item.itemId;
+        if (!id) continue;
+        const doc = item.itemData;
+        if (doc && typeof doc === "object" && doc.name) {
+          nameEntries.push([id, doc.name]);
+          visEntries.push([id, doc.visible !== false]);
+        } else if (!itemNames[id]) {
+          missingEntries.push([id, item.itemType]);
         }
       }
     }
 
-    if (!entries.length) {
-      itemsHydrateKey = nextKey;
-      isHydratingItems = false;
-      return;
-    }
-
     try {
-      const resolved = await Promise.all(
-        entries.map(async ([id, type]) => {
-          try {
-            const data = await getItem(type, id);
-            return [id, data];
-          } catch {
-            return [id, null];
-          }
-        }),
-      );
-
-      const nameEntries = [];
-      const visEntries = [];
-      for (const [id, data] of resolved) {
-        nameEntries.push([id, data?.name ?? "Unknown Item"]);
-        visEntries.push([id, data?.visible !== false]);
+      if (missingEntries.length) {
+        const resolved = await Promise.all(
+          missingEntries.map(async ([id, type]) => {
+            try {
+              const data = await getItem(type, id);
+              return [id, data];
+            } catch {
+              return [id, null];
+            }
+          }),
+        );
+        for (const [id, data] of resolved) {
+          nameEntries.push([id, data?.name ?? "Nội dung"]);
+          visEntries.push([id, data?.visible !== false]);
+        }
       }
 
       itemNames = { ...itemNames, ...Object.fromEntries(nameEntries) };

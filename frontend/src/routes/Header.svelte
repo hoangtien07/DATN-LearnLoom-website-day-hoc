@@ -65,46 +65,9 @@
     $page.url.pathname.includes("/instructor") ||
     $page.url.pathname.includes("/edit-course");
 
-  const normalizePath = (path = "/") => {
-    const trimmedPath = path.replace(/\/+$/, "");
-    return trimmedPath || "/";
-  };
-
-  $: currentPath = normalizePath($page.url.pathname);
-
-  const resolveAdminActiveTab = (path) => {
-    if (path === "/admin") {
-      return "dashboard";
-    }
-
-    if (path.startsWith("/admin/course-management")) {
-      return "course";
-    }
-
-    if (path.startsWith("/admin/order-management")) {
-      return "order";
-    }
-
-    if (path.startsWith("/admin/user-management")) {
-      return "user";
-    }
-
-    if (path.startsWith("/admin/subject-management")) {
-      return "subject";
-    }
-
-    if (path.startsWith("/admin/instructor-applications")) {
-      return "instructor-applications";
-    }
-
-    if (path.startsWith("/admin/course-review")) {
-      return "course-review";
-    }
-
-    return "";
-  };
-
-  $: adminActiveTab = resolveAdminActiveTab(currentPath);
+  // Admin nav active class được tính inline trong template bằng
+  // $page.url.pathname.startsWith(...) — Svelte tự track store dep và
+  // re-evaluate khi route đổi (tránh closure capture trong helper function).
 
   $: if ($page.url.pathname === "/course") {
     const currentQuery = $page.url.searchParams.toString();
@@ -126,43 +89,55 @@
       <nav class="admin-instructor-nav">
         <ul class="admin-links">
           <li>
-            <a class:active={adminActiveTab === "dashboard"} href="/admin"
-              >Tổng quan</a
+            <a
+              class:active={$page.url.pathname === "/admin" ||
+                $page.url.pathname === "/admin/"}
+              href="/admin">Tổng quan</a
             >
           </li>
           <li>
             <a
-              class:active={adminActiveTab === "course"}
+              class:active={$page.url.pathname.startsWith(
+                "/admin/course-management",
+              )}
               href="/admin/course-management">Quản lý khóa học</a
             >
           </li>
           <li>
             <a
-              class:active={adminActiveTab === "order"}
+              class:active={$page.url.pathname.startsWith(
+                "/admin/order-management",
+              )}
               href="/admin/order-management">Quản lý hóa đơn</a
             >
           </li>
           <li>
             <a
-              class:active={adminActiveTab === "user"}
+              class:active={$page.url.pathname.startsWith(
+                "/admin/user-management",
+              )}
               href="/admin/user-management">Quản lý tài khoản</a
             >
           </li>
           <li>
             <a
-              class:active={adminActiveTab === "subject"}
+              class:active={$page.url.pathname.startsWith(
+                "/admin/subject-management",
+              )}
               href="/admin/subject-management">Quản lý môn học</a
             >
           </li>
           <li>
             <a
-              class:active={adminActiveTab === "instructor-applications"}
+              class:active={$page.url.pathname.startsWith(
+                "/admin/instructor-applications",
+              )}
               href="/admin/instructor-applications">Duyệt giảng viên</a
             >
           </li>
           <li>
             <a
-              class:active={adminActiveTab === "course-review"}
+              class:active={$page.url.pathname.startsWith("/admin/course-review")}
               href="/admin/course-review">Duyệt khóa học</a
             >
           </li>

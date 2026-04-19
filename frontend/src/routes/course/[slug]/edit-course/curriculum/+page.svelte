@@ -23,8 +23,14 @@
 
   const fetchLessonData = async (item) => {
     try {
-      lessonData = await getItem(item.itemType, item.itemId);
-      lessonData.itemType = item.itemType;
+      // BE populateSectionItems đã đặt full doc vào item.itemData
+      // → dùng luôn, không cần gọi thêm API.
+      // Fallback: nếu thiếu (data cũ hoặc course mới chưa refetch), gọi getItem.
+      const data =
+        item.itemData && typeof item.itemData === "object"
+          ? { ...item.itemData }
+          : await getItem(item.itemType, item.itemId);
+      lessonData = { ...data, itemType: item.itemType };
     } catch (error) {
       console.error("Error fetching item data:", error);
       lessonData = null;
