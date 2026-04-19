@@ -3,6 +3,10 @@
   import { goto } from "$app/navigation";
   import { user, fetchUser } from "../../../stores/auth.js";
   import { getMyOrders, createVnpayPaymentUrl } from "$lib/js/api";
+  import Spinner from "$lib/components/Spinner.svelte";
+  import EmptyState from "$lib/components/EmptyState.svelte";
+  import ErrorState from "$lib/components/ErrorState.svelte";
+  import { pushToast } from "$lib/stores/toast.js";
 
   let orders = [];
   let pagination = null;
@@ -66,16 +70,20 @@
   const handleRetryPayment = async (order) => {
     try {
       retryingOrderId = order._id;
-      errorMsg = "";
       const response = await createVnpayPaymentUrl(order._id);
       if (response?.success && response?.paymentUrl) {
         window.location = response.paymentUrl;
         return;
       }
-      errorMsg = response?.message || "Không khởi tạo được URL thanh toán";
+      pushToast(
+        response?.message || "Không khởi tạo được URL thanh toán.",
+        { variant: "error" },
+      );
     } catch (err) {
-      errorMsg =
-        err?.response?.data?.message || "Không khởi tạo được URL thanh toán";
+      pushToast(
+        err?.response?.data?.message || "Không khởi tạo được URL thanh toán.",
+        { variant: "error" },
+      );
     } finally {
       retryingOrderId = null;
     }
@@ -119,17 +127,24 @@
     {/if}
   </div>
 
-  {#if errorMsg}
-    <div class="error-banner">{errorMsg}</div>
-  {/if}
-
   {#if loading}
-    <p class="state">Đang tải...</p>
+    <p class="state">
+      <Spinner size={18} inline label="Đang tải" /> Đang tải đơn hàng...
+    </p>
+  {:else if errorMsg}
+    <ErrorState
+      title="Không tải được đơn hàng"
+      message={errorMsg}
+      onRetry={load}
+    />
   {:else if orders.length === 0}
-    <div class="empty">
-      <p>Bạn chưa có đơn hàng nào.</p>
-      <a href="/course" class="btn-explore">Khám phá khóa học</a>
-    </div>
+    <EmptyState
+      icon="bi-bag-x"
+      title="Chưa có đơn hàng nào"
+      description="Bạn chưa từng đăng ký khóa học trả phí. Khám phá catalog để bắt đầu."
+      ctaLabel="Khám phá khóa học"
+      ctaHref="/course"
+    />
   {:else}
     <div class="orders-list">
       {#each orders as order (order._id)}

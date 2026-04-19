@@ -18,6 +18,8 @@
   import { page } from "$app/stores";
   import { sanitizeHtml } from "$lib/js/sanitize";
   import { pushToast } from "$lib/stores/toast.js";
+  import Spinner from "$lib/components/Spinner.svelte";
+  import EmptyState from "$lib/components/EmptyState.svelte";
   import Reviews from "./Reviews.svelte";
 
   let course = {};
@@ -374,7 +376,17 @@
 </script>
 
 {#if isLoading}
-  <p>Loading course...</p>
+  <p class="course-loading">
+    <Spinner size={20} inline label="Đang tải" /> Đang tải khóa học…
+  </p>
+{:else if !course || !course._id}
+  <EmptyState
+    icon="bi-exclamation-circle"
+    title="Không tìm thấy khóa học"
+    description="Khóa học có thể đã bị xóa hoặc đường dẫn không đúng."
+    ctaLabel="Quay về danh sách"
+    ctaHref="/course"
+  />
 {:else if course && course.sections && Array.isArray(course.sections)}
   <div class="course-container mt-1">
     <header class="course-header">

@@ -13,6 +13,11 @@
   import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
+  import Spinner from "$lib/components/Spinner.svelte";
+  import EmptyState from "$lib/components/EmptyState.svelte";
+  import ErrorState from "$lib/components/ErrorState.svelte";
+
+  let fetchError = "";
 
   let sort = "";
 
@@ -153,9 +158,13 @@
   const fetchCoursesByCriteria = async () => {
     try {
       isLoading = true;
+      fetchError = "";
       courses = await fetchFilteredCourses(filterCriteria);
     } catch (error) {
       console.error("Error fetching data:", error);
+      fetchError =
+        error?.response?.data?.message ||
+        "Không tải được danh sách khóa học. Vui lòng thử lại.";
       courses = [];
     } finally {
       isLoading = false;
@@ -353,7 +362,10 @@
         <h2>Khóa học</h2>
         <p>
           {#if isLoading}
-            Đang tải danh sách khóa học...
+            <Spinner size={14} inline label="Đang tải" /> Đang tải danh sách khóa
+            học...
+          {:else if fetchError}
+            &nbsp;
           {:else}
             Hiển thị {filteredCourses.length} khóa học phù hợp
           {/if}
@@ -371,7 +383,23 @@
       </div>
     </div>
 
-    <CourseAll {filterCriteria} courses={filteredCourses} {sort} />
+    {#if fetchError}
+      <ErrorState
+        title="Không tải được khóa học"
+        message={fetchError}
+        onRetry={fetchCoursesByCriteria}
+      />
+    {:else if !isLoading && filteredCourses.length === 0}
+      <EmptyState
+        icon="bi-search"
+        title="Không có khóa học phù hợp"
+        description="Thử xóa bớt bộ lọc hoặc thay đổi từ khóa tìm kiếm."
+        ctaLabel="Xóa bộ lọc"
+        onCta={clearAllFilters}
+      />
+    {:else}
+      <CourseAll {filterCriteria} courses={filteredCourses} {sort} />
+    {/if}
   </div>
 </section>
 
