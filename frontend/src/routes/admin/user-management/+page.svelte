@@ -19,6 +19,7 @@
   let users = [];
   let searchQuery = "";
   let isEditing = false;
+  let isSaving = false;
   let editingUser = null;
 
   $: filteredUsers = users.filter((account) => {
@@ -65,7 +66,9 @@
 
   const handleUpdateUser = async (event) => {
     event.preventDefault();
+    if (isSaving) return;
     try {
+      isSaving = true;
       await updateUser(editingUser._id, editingUser);
       pushToast("Đã cập nhật người dùng.", { variant: "success" });
       await fetchUsers();
@@ -77,6 +80,8 @@
         error?.response?.data?.message || "Không cập nhật được người dùng.",
         { variant: "error" },
       );
+    } finally {
+      isSaving = false;
     }
   };
 
@@ -227,7 +232,9 @@
           </Input>
         </FormGroup>
         <ModalFooter>
-          <Button type="submit" color="primary">Lưu thay đổi</Button>
+          <Button type="submit" color="primary" disabled={isSaving}>
+            {isSaving ? "Đang lưu..." : "Lưu thay đổi"}
+          </Button>
           <Button color="secondary" on:click={() => (isEditing = false)}
             >Hủy</Button
           >

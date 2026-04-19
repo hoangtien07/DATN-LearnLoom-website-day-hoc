@@ -190,8 +190,11 @@
     applyFilters();
   };
 
+  // Debounce search input 300ms để tránh gửi request mỗi keystroke.
+  let searchDebounceHandle = null;
   const handleSearchInput = () => {
-    applyFilters();
+    if (searchDebounceHandle) clearTimeout(searchDebounceHandle);
+    searchDebounceHandle = setTimeout(() => applyFilters(), 300);
   };
 
   // Cập nhật danh sách khóa học khi bộ lọc thay đổi

@@ -8,7 +8,22 @@
   // Khai báo biến phân trang
   export let currentPage = 1;
   let pageSize = 12;
-  $: paginatedItems = paginate({ items: sortedCourses, pageSize, currentPage }); // Sắp xếp trước khi phân trang
+  $: paginatedItems = paginate({ items: sortedCourses, pageSize, currentPage });
+
+  // BUG-FE-022: Reset về trang 1 khi list courses đổi (filter, search, sort)
+  // để tránh đang ở trang 3 rồi filter mới ra list ít hơn → trang 3 trống.
+  let lastListKey = "";
+  $: {
+    const key = `${(courses || []).length}|${sort}|${Object.values(
+      filterCriteria || {},
+    )
+      .map((v) => (Array.isArray(v) ? v.join(",") : v))
+      .join("|")}`;
+    if (key !== lastListKey) {
+      lastListKey = key;
+      currentPage = 1;
+    }
+  }
 
   // Biến bộ lọc
   export let filterCriteria = {};

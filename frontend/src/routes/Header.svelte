@@ -217,10 +217,15 @@
                 bind:value={searchKeyword}
                 on:keydown={handleSearchEnter}
                 placeholder="Tìm kiếm khóa học..."
+                aria-label="Tìm kiếm khóa học"
               />
-              <button on:click={handleHeaderSearch}
-                ><i class="bi bi-search"></i></button
+              <button
+                on:click={handleHeaderSearch}
+                aria-label="Tìm kiếm"
+                type="button"
               >
+                <i class="bi bi-search" aria-hidden="true"></i>
+              </button>
             </div>
           </li>
         </ul>

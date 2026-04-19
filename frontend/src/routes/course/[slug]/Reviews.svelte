@@ -17,6 +17,7 @@
 
   // Khai báo biến
   const dispatch = createEventDispatcher();
+  let isSubmitting = false;
   let courseId = "";
   let userId = "";
   let averageRating = 0;
@@ -89,8 +90,9 @@
       pushToast("Vui lòng chọn số sao và nhập đánh giá.", { variant: "warn" });
       return;
     }
-
+    if (isSubmitting) return;
     try {
+      isSubmitting = true;
       await addReview(courseId, userId, newReview);
       newReview = { rating: 0, comment: "" };
       pushToast("Đã gửi đánh giá, cảm ơn bạn!", { variant: "success" });
@@ -117,6 +119,8 @@
         );
       }
       console.error("Error creating review:", error);
+    } finally {
+      isSubmitting = false;
     }
   };
 
@@ -126,8 +130,9 @@
       pushToast("Vui lòng chọn số sao và nhập đánh giá.", { variant: "warn" });
       return;
     }
-
+    if (isSubmitting) return;
     try {
+      isSubmitting = true;
       await updateReview(editingReviewId, editingReview);
       isEdited = false;
       editingReviewId = null;
@@ -137,6 +142,8 @@
     } catch (error) {
       console.error("Error updating review:", error);
       pushToast("Không cập nhật được, thử lại sau.", { variant: "error" });
+    } finally {
+      isSubmitting = false;
     }
   };
 
@@ -269,8 +276,15 @@
                   />
                 {/if}
                 <div class="review-form-actions">
-                  <button type="submit" class="review-btn primary"
-                    >{isEdited ? "Lưu đánh giá" : "Gửi đánh giá"}</button
+                  <button
+                    type="submit"
+                    class="review-btn primary"
+                    disabled={isSubmitting}
+                    >{isSubmitting
+                      ? "Đang gửi..."
+                      : isEdited
+                        ? "Lưu đánh giá"
+                        : "Gửi đánh giá"}</button
                   >
                   {#if isEdited}
                     <button

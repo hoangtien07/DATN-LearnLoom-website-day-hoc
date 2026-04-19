@@ -41,6 +41,7 @@
   let deletedCourses = [];
   let isLoading = true;
   let isDeleting = false;
+  let isCreating = false;
   let currentPage = 1;
   let pageSize = 8;
   let showCreateModal = false;
@@ -127,8 +128,10 @@
 
   const handleCreateCourse = async (event) => {
     event?.preventDefault();
+    if (isCreating) return;
 
     try {
+      isCreating = true;
       if (
         !newCourse.name ||
         !newCourse.summary ||
@@ -168,6 +171,8 @@
         error?.response?.data?.message || "Không tạo được khóa học.",
         { variant: "error" },
       );
+    } finally {
+      isCreating = false;
     }
   };
 </script>
@@ -422,7 +427,9 @@
           bind:checked={newCourse.is_published}
         />
       </FormGroup>
-      <Button type="submit" color="primary">Tạo khóa học</Button>
+      <Button type="submit" color="primary" disabled={isCreating}>
+        {isCreating ? "Đang tạo..." : "Tạo khóa học"}
+      </Button>
     </Form>
   </ModalBody>
 </Modal>
