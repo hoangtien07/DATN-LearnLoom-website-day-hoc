@@ -16,6 +16,7 @@
   import { user, fetchUser } from "../../../stores/auth";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
+  import { sanitizeHtml } from "$lib/js/sanitize";
   import Reviews from "./Reviews.svelte";
 
   let course = {};
@@ -441,7 +442,7 @@
     <div class="course-content">
       <div class="course-main-content">
         <h2>Nội dung khóa học</h2>
-        {@html course.description}
+        {@html sanitizeHtml(course.description)}
       </div>
       <div class="curriculum-sidebar">
         <h3>Mục lục</h3>

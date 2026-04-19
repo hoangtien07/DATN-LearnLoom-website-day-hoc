@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { getItem } from "$lib/js/api";
   import { getYoutubeVideoId } from "$lib/js/function";
+  import { sanitizeHtml } from "$lib/js/sanitize";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
 
@@ -78,7 +79,7 @@
   <div class="lesson-content">
     {#if lesson.type === "TextLesson"}
       {#if lesson.content}
-        <div class="lesson-html">{@html lesson.content}</div>
+        <div class="lesson-html">{@html sanitizeHtml(lesson.content)}</div>
       {:else}
         <p class="lesson-empty">Bài học này chưa có nội dung.</p>
       {/if}

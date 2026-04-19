@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { createCourse } from "./js/api.js";
   import { fetchUser, user } from "../stores/auth.js";
+  import { sanitizeHtml } from "./js/sanitize.js";
 
   import Editor from "cl-editor/src/Editor.svelte";
 
@@ -102,7 +103,7 @@
     <div class="d-flex">
       <Editor {colors} on:change={(evt) => (course.description = evt.detail)} />
       <div>
-        {@html course.description}
+        {@html sanitizeHtml(course.description)}
       </div>
     </div>
   </div>
