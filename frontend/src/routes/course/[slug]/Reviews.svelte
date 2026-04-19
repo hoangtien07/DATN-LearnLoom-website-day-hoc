@@ -4,6 +4,8 @@
   import { addReview, updateReview, deleteReview } from "$lib/js/api";
   import { Progress } from "@sveltestrap/sveltestrap";
   import StarRating from "svelte-star-rating";
+  import { pushToast } from "$lib/stores/toast.js";
+  import { confirm as uiConfirm } from "$lib/stores/confirm.js";
 
   // Dữ liệu được truyền vào
   export let course;
@@ -84,29 +86,35 @@
   // Hàm xử lý khi gửi đánh giá mới
   const handleCreateReview = async () => {
     if (!newReview.rating || !newReview.comment.trim()) {
-      alert("Vui lòng chọn số sao và nhập đánh giá của bạn.");
+      pushToast("Vui lòng chọn số sao và nhập đánh giá.", { variant: "warn" });
       return;
     }
 
     try {
       await addReview(courseId, userId, newReview);
       newReview = { rating: 0, comment: "" };
+      pushToast("Đã gửi đánh giá, cảm ơn bạn!", { variant: "success" });
       await dispatch("reviewSubmitted");
     } catch (error) {
       const code = error?.response?.data?.code;
       const existingId = error?.response?.data?.existingReviewId;
       if (code === "REVIEW_ALREADY_EXISTS" && existingId) {
-        // Chuyển sang chế độ update ngay lập tức.
         const existing = reviews.find((r) => r._id === existingId);
         handleEditReview(existing || { _id: existingId, ...newReview });
-        alert("Bạn đã đánh giá khóa học này — vui lòng cập nhật đánh giá cũ.");
+        pushToast("Bạn đã đánh giá khóa học này — đang mở chế độ cập nhật.", {
+          variant: "info",
+        });
       } else if (code === "PROGRESS_INSUFFICIENT") {
         const { currentProgress, minProgress } = error.response.data;
-        alert(
-          `Cần hoàn thành tối thiểu ${minProgress}% khóa học mới được đánh giá. Tiến độ hiện tại: ${currentProgress}%.`,
+        pushToast(
+          `Cần hoàn thành tối thiểu ${minProgress}% để đánh giá (hiện ${currentProgress}%).`,
+          { variant: "warn", durationMs: 6000 },
         );
       } else {
-        alert(error?.response?.data?.message || "Không gửi được đánh giá");
+        pushToast(
+          error?.response?.data?.message || "Không gửi được đánh giá.",
+          { variant: "error" },
+        );
       }
       console.error("Error creating review:", error);
     }
@@ -115,7 +123,7 @@
   // Hàm xử lý khi cập nhật đánh giá
   const handleUpdateReview = async () => {
     if (!editingReview.rating || !editingReview.comment.trim()) {
-      alert("Vui lòng chọn số sao và nhập đánh giá của bạn.");
+      pushToast("Vui lòng chọn số sao và nhập đánh giá.", { variant: "warn" });
       return;
     }
 
@@ -124,9 +132,11 @@
       isEdited = false;
       editingReviewId = null;
       editingReview = { rating: 0, comment: "" };
+      pushToast("Đã cập nhật đánh giá.", { variant: "success" });
       await dispatch("reviewSubmitted");
     } catch (error) {
       console.error("Error updating review:", error);
+      pushToast("Không cập nhật được, thử lại sau.", { variant: "error" });
     }
   };
 
@@ -137,12 +147,20 @@
   };
 
   const handleDeleteReview = async (reviewId) => {
-    if (confirm("Bạn có chắc chắn muốn xóa đánh giá này?")) {
+    const ok = await uiConfirm({
+      title: "Xóa đánh giá",
+      message: "Bạn có chắc chắn muốn xóa đánh giá này?",
+      confirmLabel: "Xóa",
+      variant: "danger",
+    });
+    if (ok) {
       try {
         await deleteReview(reviewId);
+        pushToast("Đã xóa đánh giá.", { variant: "success" });
         await dispatch("reviewSubmitted");
       } catch (error) {
         console.error("Error deleting review:", error);
+        pushToast("Không xóa được đánh giá.", { variant: "error" });
       }
     }
   };

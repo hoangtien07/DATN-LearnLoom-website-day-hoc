@@ -10,6 +10,8 @@
   import StarRating from "svelte-star-rating";
   import { createEventDispatcher } from "svelte";
   import { hideCourse, publishCourse, unpublishCourse } from "$lib/js/api.js";
+  import { pushToast } from "$lib/stores/toast.js";
+  import { confirm } from "$lib/stores/confirm.js";
 
   export let course;
   export let isEdit = false;
@@ -60,8 +62,9 @@
     e.preventDefault();
 
     if (course.is_published && !canMoveToDraft) {
-      window.alert(
-        "Khóa học đang có học viên theo học nên không thể ngừng bán theo cách chuyển về nháp. Bạn có thể dùng thao tác Ẩn để ngừng hiển thị với học viên mới.",
+      pushToast(
+        "Khóa học đang có học viên theo học nên không thể ngừng bán. Dùng thao tác Ẩn thay thế.",
+        { variant: "warn", durationMs: 6000 },
       );
       return;
     }
@@ -71,6 +74,7 @@
       if (course.is_published) {
         await unpublishCourse(course.slug);
         course = { ...course, is_published: false };
+        pushToast("Đã ngừng bán khóa học", { variant: "success" });
       } else {
         const res = await publishCourse(course.slug);
         const updated = res?.course || course;
@@ -83,16 +87,21 @@
           reviewRejectionReason: updated.reviewRejectionReason,
         };
         if (!updated.is_published && updated.reviewStatus === "pending") {
-          window.alert(
+          pushToast(
             "Đã gửi yêu cầu duyệt. Khóa học sẽ được xuất bản sau khi admin chấp nhận.",
+            { variant: "info", durationMs: 6000 },
           );
+        } else if (updated.is_published) {
+          pushToast("Đã xuất bản khóa học", { variant: "success" });
         }
       }
       dispatch("courseUpdated", course);
     } catch (err) {
       console.error(err);
       const message = err?.response?.data?.message;
-      if (message) window.alert(message);
+      pushToast(message || "Không thao tác được, thử lại sau.", {
+        variant: "error",
+      });
     } finally {
       isActing = false;
     }
@@ -100,17 +109,22 @@
 
   const handleHide = async (e) => {
     e.preventDefault();
-    const confirmed = window.confirm(
-      `Bạn có chắc muốn ẩn khóa học "${course.name}"? Khóa học sẽ không còn hiển thị với học viên.`,
-    );
-    if (!confirmed) return;
+    const ok = await confirm({
+      title: "Ẩn khóa học",
+      message: `Bạn có chắc muốn ẩn "${course.name}"? Khóa học sẽ không còn hiển thị với học viên mới.`,
+      confirmLabel: "Ẩn khóa học",
+      variant: "danger",
+    });
+    if (!ok) return;
 
     isActing = true;
     try {
       await hideCourse(course.slug);
+      pushToast("Đã ẩn khóa học", { variant: "success" });
       dispatch("courseHidden", course);
     } catch (err) {
       console.error(err);
+      pushToast("Không ẩn được khóa học, thử lại sau.", { variant: "error" });
     } finally {
       isActing = false;
     }

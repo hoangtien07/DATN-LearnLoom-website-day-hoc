@@ -7,6 +7,8 @@
     approveCourseReview,
     rejectCourseReview,
   } from "$lib/js/api";
+  import { pushToast } from "$lib/stores/toast.js";
+  import { confirm as uiConfirm } from "$lib/stores/confirm.js";
 
   let courses = [];
   let pagination = null;
@@ -38,14 +40,22 @@
   };
 
   const handleApprove = async (course) => {
-    if (!confirm(`Duyệt & xuất bản khóa học "${course.name}"?`)) return;
+    const ok = await uiConfirm({
+      title: "Duyệt khóa học",
+      message: `Duyệt & xuất bản khóa học "${course.name}"?`,
+      confirmLabel: "Duyệt & xuất bản",
+    });
+    if (!ok) return;
     try {
       processingSlug = course.slug;
       errorMsg = "";
       await approveCourseReview(course.slug);
+      pushToast("Đã duyệt & xuất bản khóa học.", { variant: "success" });
       await load();
     } catch (err) {
-      errorMsg = err?.response?.data?.message || "Không duyệt được.";
+      const msg = err?.response?.data?.message || "Không duyệt được.";
+      errorMsg = msg;
+      pushToast(msg, { variant: "error" });
     } finally {
       processingSlug = null;
     }
@@ -72,10 +82,15 @@
       processingSlug = rejectTarget.slug;
       errorMsg = "";
       await rejectCourseReview(rejectTarget.slug, rejectionReason.trim());
+      pushToast("Đã từ chối khóa học và gửi lý do cho giảng viên.", {
+        variant: "success",
+      });
       closeRejectModal();
       await load();
     } catch (err) {
-      errorMsg = err?.response?.data?.message || "Không từ chối được.";
+      const msg = err?.response?.data?.message || "Không từ chối được.";
+      errorMsg = msg;
+      pushToast(msg, { variant: "error" });
     } finally {
       processingSlug = null;
     }

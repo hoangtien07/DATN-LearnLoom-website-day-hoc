@@ -1,6 +1,8 @@
 <script>
   import { onMount } from "svelte";
   import { getUsers, updateUser, deleteUser } from "$lib/js/api";
+  import { pushToast } from "$lib/stores/toast.js";
+  import { confirm as uiConfirm } from "$lib/stores/confirm.js";
   import {
     Table,
     Button,
@@ -47,42 +49,55 @@
 
   const fetchUsers = async () => {
     try {
-      users = await getUsers();
+      const result = await getUsers();
+      // getUsers trả { data, pagination } sau reshape — unwrap.
+      users = Array.isArray(result) ? result : result?.data || [];
     } catch (error) {
       console.error("Error fetching users:", error);
-      // Handle error, e.g., display an error message
+      pushToast("Không tải được danh sách người dùng.", { variant: "error" });
     }
   };
 
   const handleEditUser = (user) => {
     isEditing = true;
-    editingUser = { ...user }; // Create a copy to avoid modifying the original
+    editingUser = { ...user };
   };
 
   const handleUpdateUser = async (event) => {
-    // Add event parameter
-    event.preventDefault(); // Call preventDefault inside the function
-
+    event.preventDefault();
     try {
       await updateUser(editingUser._id, editingUser);
-      await fetchUsers(); // Refresh the user list
+      pushToast("Đã cập nhật người dùng.", { variant: "success" });
+      await fetchUsers();
       isEditing = false;
       editingUser = null;
     } catch (error) {
       console.error("Error updating user:", error);
-      // Handle error, e.g., display an error message
+      pushToast(
+        error?.response?.data?.message || "Không cập nhật được người dùng.",
+        { variant: "error" },
+      );
     }
   };
 
   const handleDeleteUser = async (userId) => {
-    if (confirm("Are you sure you want to delete this user?")) {
-      try {
-        await deleteUser(userId);
-        await fetchUsers(); // Refresh the user list
-      } catch (error) {
-        console.error("Error deleting user:", error);
-        // Handle error, e.g., display an error message
-      }
+    const ok = await uiConfirm({
+      title: "Xóa người dùng",
+      message: "Bạn có chắc muốn xóa tài khoản này? Hành động không thể hoàn tác.",
+      confirmLabel: "Xóa",
+      variant: "danger",
+    });
+    if (!ok) return;
+    try {
+      await deleteUser(userId);
+      pushToast("Đã xóa người dùng.", { variant: "success" });
+      await fetchUsers();
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      pushToast(
+        error?.response?.data?.message || "Không xóa được người dùng.",
+        { variant: "error" },
+      );
     }
   };
 </script>

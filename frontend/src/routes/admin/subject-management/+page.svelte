@@ -7,6 +7,8 @@
     deleteSubject,
   } from "$lib/js/api";
   import { Table, Button, Input } from "@sveltestrap/sveltestrap";
+  import { pushToast } from "$lib/stores/toast.js";
+  import { confirm as uiConfirm } from "$lib/stores/confirm.js";
 
   let subjects = [];
   let newName = "";
@@ -31,15 +33,21 @@
   };
 
   const handleCreateSubject = async () => {
-    if (newName.trim() === "") return;
-
+    if (newName.trim() === "") {
+      pushToast("Tên môn học không được để trống.", { variant: "warn" });
+      return;
+    }
     try {
       await createSubject({ name: newName });
+      pushToast("Đã tạo môn học.", { variant: "success" });
       await fetchSubjects();
       newName = "";
     } catch (error) {
       console.error("Error creating subject:", error);
-      // Xử lý lỗi, ví dụ: hiển thị thông báo lỗi
+      pushToast(
+        error?.response?.data?.message || "Không tạo được môn học.",
+        { variant: "error" },
+      );
     }
   };
 
@@ -50,29 +58,38 @@
   };
 
   const handleUpdateSubject = async () => {
-    if (newName.trim() === "") return;
-
+    if (newName.trim() === "") {
+      pushToast("Tên môn học không được để trống.", { variant: "warn" });
+      return;
+    }
     try {
       await updateSubject(editingSubjectId, { name: newName });
+      pushToast("Đã cập nhật môn học.", { variant: "success" });
       await fetchSubjects();
       isEditing = false;
       editingSubjectId = null;
       newName = "";
     } catch (error) {
       console.error("Error updating subject:", error);
-      // Xử lý lỗi, ví dụ: hiển thị thông báo lỗi
+      pushToast("Không cập nhật được môn học.", { variant: "error" });
     }
   };
 
   const handleDeleteSubject = async (subjectId) => {
-    if (confirm("Bạn có chắc chắn muốn xóa môn học này?")) {
-      try {
-        await deleteSubject(subjectId);
-        await fetchSubjects();
-      } catch (error) {
-        console.error("Error deleting subject:", error);
-        // Xử lý lỗi, ví dụ: hiển thị thông báo lỗi
-      }
+    const ok = await uiConfirm({
+      title: "Xóa môn học",
+      message: "Bạn có chắc chắn muốn xóa môn học này?",
+      confirmLabel: "Xóa",
+      variant: "danger",
+    });
+    if (!ok) return;
+    try {
+      await deleteSubject(subjectId);
+      pushToast("Đã xóa môn học.", { variant: "success" });
+      await fetchSubjects();
+    } catch (error) {
+      console.error("Error deleting subject:", error);
+      pushToast("Không xóa được môn học.", { variant: "error" });
     }
   };
 </script>

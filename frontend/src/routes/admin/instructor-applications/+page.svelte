@@ -7,6 +7,8 @@
     approveInstructorApplication,
     rejectInstructorApplication,
   } from "$lib/js/api";
+  import { pushToast } from "$lib/stores/toast.js";
+  import { confirm as uiConfirm } from "$lib/stores/confirm.js";
 
   let applications = [];
   let pagination = null;
@@ -45,15 +47,22 @@
   };
 
   const handleApprove = async (app) => {
-    if (!confirm(`Duyệt đơn của "${app.fullName}"? User sẽ được promote thành instructor.`)) return;
+    const ok = await uiConfirm({
+      title: "Duyệt đơn làm giảng viên",
+      message: `Duyệt đơn của "${app.fullName}"? User sẽ được nâng quyền thành giảng viên.`,
+      confirmLabel: "Duyệt",
+    });
+    if (!ok) return;
     processError = "";
     try {
       processingId = app._id;
       await approveInstructorApplication(app._id);
+      pushToast(`Đã duyệt đơn của ${app.fullName}.`, { variant: "success" });
       await load();
     } catch (err) {
-      processError =
-        err?.response?.data?.message || "Không duyệt được đơn.";
+      const msg = err?.response?.data?.message || "Không duyệt được đơn.";
+      processError = msg;
+      pushToast(msg, { variant: "error" });
     } finally {
       processingId = null;
     }
@@ -82,11 +91,15 @@
     try {
       processingId = rejectTarget._id;
       await rejectInstructorApplication(rejectTarget._id, rejectionReason.trim());
+      pushToast("Đã từ chối đơn và gửi lý do cho người nộp.", {
+        variant: "success",
+      });
       closeRejectModal();
       await load();
     } catch (err) {
-      processError =
-        err?.response?.data?.message || "Không từ chối được đơn.";
+      const msg = err?.response?.data?.message || "Không từ chối được đơn.";
+      processError = msg;
+      pushToast(msg, { variant: "error" });
     } finally {
       processingId = null;
     }
