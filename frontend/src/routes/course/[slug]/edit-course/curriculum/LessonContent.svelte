@@ -1,8 +1,21 @@
 <script>
   import { updateItem } from "$lib/js/api";
   import Editor from "cl-editor";
+  import { dndzone, SOURCES } from "svelte-dnd-action";
+  import { flip } from "svelte/animate";
 
   export let lessonData;
+
+  const FLIP_MS = 200;
+  let nextTempId = 1;
+
+  // Svelte-dnd-action yêu cầu mỗi item có `id` ổn định. Question từ DB có
+  // `_id`; question mới thêm local chưa có → gán temp id.
+  const ensureQuestionIds = (questions) =>
+    questions.map((q) => ({
+      ...q,
+      id: q.id || (q._id ? String(q._id) : `q-tmp-${nextTempId++}`),
+    }));
 
   let editedName = "";
   let editedContent = "";
@@ -43,13 +56,15 @@
       hasTimer = Number(lessonData.timer) > 0;
       timerMinutes =
         Number(lessonData.timer) > 0 ? Number(lessonData.timer) : 10;
-      editedQuestions = (lessonData.questions || []).map((question) => ({
-        ...question,
-        options: (question.options || []).map((option) => ({
-          ...option,
-          isCorrect: !!option.isCorrect,
+      editedQuestions = ensureQuestionIds(
+        (lessonData.questions || []).map((question) => ({
+          ...question,
+          options: (question.options || []).map((option) => ({
+            ...option,
+            isCorrect: !!option.isCorrect,
+          })),
         })),
-      }));
+      );
     }
 
     saveMessage = "";
@@ -128,7 +143,7 @@
   };
 
   const addQuestion = () => {
-    editedQuestions = [
+    editedQuestions = ensureQuestionIds([
       ...editedQuestions,
       {
         questionText: "",
@@ -138,7 +153,7 @@
         ],
         explanation: "",
       },
-    ];
+    ]);
   };
 
   const removeQuestion = (questionIndex) => {
@@ -147,30 +162,16 @@
     );
   };
 
-  const moveQuestionUp = (questionIndex) => {
-    if (questionIndex === 0) {
-      return;
-    }
-
-    [editedQuestions[questionIndex - 1], editedQuestions[questionIndex]] = [
-      editedQuestions[questionIndex],
-      editedQuestions[questionIndex - 1],
-    ];
-
-    editedQuestions = [...editedQuestions];
+  // Drag-drop handlers (svelte-dnd-action). Chỉ update local state;
+  // thứ tự mới sẽ được lưu cùng toàn bộ questions khi user bấm "Lưu thay đổi".
+  const onQuestionsConsider = (e) => {
+    editedQuestions = e.detail.items;
   };
-
-  const moveQuestionDown = (questionIndex) => {
-    if (questionIndex === editedQuestions.length - 1) {
-      return;
+  const onQuestionsFinalize = (e) => {
+    editedQuestions = e.detail.items;
+    if (e.detail.info.source === SOURCES.POINTER) {
+      setSaveState("Đã sắp xếp lại. Nhấn 'Lưu thay đổi' để ghi vào DB.", "");
     }
-
-    [editedQuestions[questionIndex + 1], editedQuestions[questionIndex]] = [
-      editedQuestions[questionIndex],
-      editedQuestions[questionIndex + 1],
-    ];
-
-    editedQuestions = [...editedQuestions];
   };
 
   const addOption = (questionIndex) => {
@@ -374,31 +375,40 @@
             Chưa có câu hỏi nào. Hãy thêm câu hỏi đầu tiên.
           </div>
         {:else}
-          {#each editedQuestions as question, questionIndex}
-            <article class="question-card">
-              <div class="question-head">
-                <h4>Câu hỏi {questionIndex + 1}</h4>
-                <div class="course-edit-actions">
-                  <button
-                    class="course-edit-btn outline"
-                    on:click={() => moveQuestionUp(questionIndex)}
+          <div
+            class="questions-dnd"
+            use:dndzone={{
+              items: editedQuestions,
+              flipDurationMs: FLIP_MS,
+              type: "questions",
+              dropTargetStyle: {},
+            }}
+            on:consider={onQuestionsConsider}
+            on:finalize={onQuestionsFinalize}
+          >
+            {#each editedQuestions as question, questionIndex (question.id)}
+              <article
+                class="question-card"
+                animate:flip={{ duration: FLIP_MS }}
+              >
+                <div class="question-head">
+                  <span
+                    class="drag-handle"
+                    aria-label="Kéo để sắp xếp câu hỏi"
+                    title="Kéo để sắp xếp"
                   >
-                    Lên
-                  </button>
-                  <button
-                    class="course-edit-btn outline"
-                    on:click={() => moveQuestionDown(questionIndex)}
-                  >
-                    Xuống
-                  </button>
-                  <button
-                    class="course-edit-btn danger"
-                    on:click={() => removeQuestion(questionIndex)}
-                  >
-                    Xóa câu hỏi
-                  </button>
+                    <i class="bi bi-grip-vertical" aria-hidden="true"></i>
+                  </span>
+                  <h4>Câu hỏi {questionIndex + 1}</h4>
+                  <div class="course-edit-actions">
+                    <button
+                      class="course-edit-btn danger"
+                      on:click={() => removeQuestion(questionIndex)}
+                    >
+                      Xóa câu hỏi
+                    </button>
+                  </div>
                 </div>
-              </div>
 
               <div class="course-edit-field">
                 <label
@@ -464,7 +474,8 @@
                 ></textarea>
               </div>
             </article>
-          {/each}
+            {/each}
+          </div>
         {/if}
       </section>
     {/if}
@@ -509,6 +520,36 @@
     gap: 0.6rem;
     margin-bottom: 0.6rem;
     flex-wrap: wrap;
+  }
+
+  .question-head h4 {
+    flex: 1;
+  }
+
+  .drag-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    color: #94a3b8;
+    cursor: grab;
+    font-size: 1.05rem;
+    transition: color 0.15s;
+  }
+  .drag-handle:hover {
+    color: #2563eb;
+  }
+  .drag-handle:active {
+    cursor: grabbing;
+  }
+
+  .questions-dnd {
+    display: flex;
+    flex-direction: column;
+  }
+  :global(.questions-dnd.dragged-over) {
+    background: rgba(37, 99, 235, 0.04);
+    border-radius: 12px;
   }
 
   .question-head h4 {
