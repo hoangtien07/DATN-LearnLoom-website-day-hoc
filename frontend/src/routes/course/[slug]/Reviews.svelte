@@ -387,7 +387,11 @@
               <div class="review-header">
                 <div class="review-thumbnail">
                   {#if hasImage(review.thumbnail)}
-                    <img src={review.thumbnail} alt={review.userName} />
+                    <img
+                      src={review.thumbnail}
+                      alt={`Avatar của ${review.userName}`}
+                      loading="lazy"
+                    />
                   {:else}
                     <span class="thumbnail-fallback"
                       >{avatarInitial(review.userName)}</span

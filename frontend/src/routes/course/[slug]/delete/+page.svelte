@@ -12,7 +12,6 @@
   });
 
   const handleDelete = async () => {
-    console.log(course._id);
     await deleteCourse(course._id);
     window.location.href = "/";
   };

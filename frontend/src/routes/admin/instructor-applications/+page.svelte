@@ -173,7 +173,12 @@
           <div class="app-top">
             <div class="applicant">
               {#if app.user?.thumbnail}
-                <img src={app.user.thumbnail} alt="avatar" class="avatar" />
+                <img
+                  src={app.user.thumbnail}
+                  alt={`Avatar của ${app.user.username || app.fullName}`}
+                  class="avatar"
+                  loading="lazy"
+                />
               {:else}
                 <div class="avatar placeholder">
                   {(app.user?.username || app.fullName)?.charAt(0)?.toUpperCase() ||

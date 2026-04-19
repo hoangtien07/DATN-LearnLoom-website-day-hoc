@@ -156,7 +156,7 @@
 
   <a href={linkCourse}>
     <Card>
-      <CardImg src={course.image_url} alt={course.name} />
+      <CardImg src={course.image_url} alt={course.name} loading="lazy" />
       <CardBody>
         <CardTitle>{course.name}</CardTitle>
         <CardText class="course-summary">{course.summary}</CardText>
@@ -317,7 +317,9 @@
 
   :global(.card-img) {
     width: 100%;
-    height: 155px;
+    /* Aspect ratio 16/9 responsive thay fixed height (BUG-FE-034) */
+    aspect-ratio: 16 / 9;
+    height: auto;
     object-fit: cover;
   }
 

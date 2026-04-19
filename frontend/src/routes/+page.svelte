@@ -117,7 +117,7 @@
   <div
     class="curr-body d-flex align-items-center justify-content-center my-4 mb-5 pt-2 pb-5 position-relative"
   >
-    <img src={curriculumImg2} alt="curriculum" />
+    <img src={curriculumImg2} alt="Minh hoạ curriculum" loading="lazy" />
     <div class="curr-features">
       <h4 class="mb-4 text-center">
         Các tính năng đặc biệt dành riêng cho bạn:
@@ -132,7 +132,7 @@
         </ButtonGroup>
       </div>
     </div>
-    <img src={curriculumImg1} alt="curriculum" />
+    <img src={curriculumImg1} alt="Minh hoạ curriculum" loading="lazy" />
   </div>
 </section>
 <div class="line my-5"></div>

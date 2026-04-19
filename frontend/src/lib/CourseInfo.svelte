@@ -84,9 +84,7 @@
     await fetchUser();
     if (teacher) {
       course.teacher = teacher._id;
-      console.log(course.teacher);
     } else {
-      console.log("Teacher not loaded yet");
     }
   });
 

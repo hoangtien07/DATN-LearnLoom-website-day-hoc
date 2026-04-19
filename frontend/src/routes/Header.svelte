@@ -164,7 +164,12 @@
           <a href="/" class="text-primary me-3">Học viên</a>
           <Dropdown>
             <DropdownToggle outline color="light" caret>
-              <img src={$user.thumbnail} id="avatar" alt="avatar" />
+              <img
+                src={$user.thumbnail}
+                id="avatar"
+                alt={`Avatar của ${$user.username}`}
+                loading="lazy"
+              />
             </DropdownToggle>
             <DropdownMenu end>
               <DropdownItem header disable>
@@ -246,7 +251,12 @@
                 <!-- <div id="avatar">
                   <Image fluid alt="avatar" src={$user.thumbnail} />
                 </div> -->
-                <img src={$user.thumbnail} id="avatar" alt="avatar" />
+                <img
+                src={$user.thumbnail}
+                id="avatar"
+                alt={`Avatar của ${$user.username}`}
+                loading="lazy"
+              />
               </DropdownToggle>
               <DropdownMenu end>
                 <DropdownItem><a href="/profile">Learning path</a></DropdownItem
@@ -468,6 +478,41 @@
 
     .user-profile {
       align-self: flex-end;
+    }
+  }
+
+  /* Mobile < 768px: layout container column, search bar full-width */
+  @media (max-width: 768px) {
+    .container {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      padding: 0 1rem;
+    }
+    .logo {
+      margin-right: 0;
+      height: 36px;
+    }
+    .main-menu {
+      flex-direction: column;
+      align-items: stretch;
+      width: 100%;
+      gap: 0.5rem;
+    }
+    .search-bar {
+      margin-left: 0;
+      width: 100%;
+    }
+    .search-bar input {
+      flex: 1;
+    }
+    .guest-student-nav {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.5rem;
+      width: 100%;
+    }
+    .admin-instructor-nav ul {
+      flex-wrap: wrap;
     }
   }
 </style>

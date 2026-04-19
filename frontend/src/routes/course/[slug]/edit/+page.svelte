@@ -9,8 +9,6 @@
   let course = {};
   const slug = $page.params.slug;
 
-  console.log(slug);
-
   onMount(async () => {
     course = await fetchCourseById(slug);
   });

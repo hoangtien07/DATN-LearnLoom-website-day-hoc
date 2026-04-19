@@ -32,8 +32,6 @@
 
     try {
       await createCourse(course);
-      // Handle success (e.g., redirect to course details page)
-      console.log("Course created successfully!");
     } catch (error) {
       errorMessage = error.message;
     } finally {
@@ -45,7 +43,6 @@
   onMount(() => {
     fetchUser();
     course.teacher = teacher._id;
-    console.log(course.teacher);
   });
 
   $: teacher = $user;
