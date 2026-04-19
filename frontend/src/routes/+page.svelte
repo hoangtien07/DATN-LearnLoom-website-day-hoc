@@ -10,6 +10,7 @@
     Col,
     Accordion,
     AccordionItem,
+    Image,
   } from "@sveltestrap/sveltestrap";
   import heroImg from "$lib/images/hero.png";
   import featuresImg from "$lib/images/home-features.png";

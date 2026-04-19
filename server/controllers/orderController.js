@@ -42,13 +42,24 @@ const buildSignature = (sortedParams, secretKey) =>
     .update(buildQueryString(sortedParams), "utf8")
     .digest("hex");
 
+// VNPay expect IPv4 address. Node.js trên Windows localhost trả IPv6 `::1`
+// → VNPay verify sai chữ ký (code 70). Chuẩn hóa về IPv4.
+const normalizeIp = (ip) => {
+  if (!ip) return "127.0.0.1";
+  if (ip === "::1" || ip === "::ffff:127.0.0.1") return "127.0.0.1";
+  if (ip.startsWith("::ffff:")) return ip.slice(7); // IPv6-mapped IPv4
+  return ip;
+};
+
 const getClientIp = (req) => {
   const forwarded = req.headers["x-forwarded-for"];
+  let ip;
   if (forwarded && typeof forwarded === "string") {
-    return forwarded.split(",")[0].trim();
+    ip = forwarded.split(",")[0].trim();
+  } else {
+    ip = req.socket?.remoteAddress || req.ip;
   }
-
-  return req.socket?.remoteAddress || req.ip || "127.0.0.1";
+  return normalizeIp(ip);
 };
 
 const getFrontendBaseUrl = () =>
@@ -107,7 +118,7 @@ const processGatewayResult = async (req) => {
     };
   }
 
-  const secretKey = process.env.VNPAY_HASH_SECRET;
+  const secretKey = (process.env.VNPAY_HASH_SECRET || "").trim();
   if (!secretKey) {
     return {
       ok: false,
@@ -297,11 +308,13 @@ export const createVnpayPaymentUrl = async (req, res) => {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const tmnCode = process.env.VNPAY_TMN_CODE;
-    const hashSecret = process.env.VNPAY_HASH_SECRET;
-    const vnpUrl =
+    // Trim env để loại CR/LF/space thừa — nguyên nhân #2 gây sai chữ ký.
+    const tmnCode = (process.env.VNPAY_TMN_CODE || "").trim();
+    const hashSecret = (process.env.VNPAY_HASH_SECRET || "").trim();
+    const vnpUrl = (
       process.env.VNPAY_URL ||
-      "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
+      "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
+    ).trim();
 
     if (!tmnCode || !hashSecret) {
       return res.status(500).json({
@@ -330,45 +343,86 @@ export const createVnpayPaymentUrl = async (req, res) => {
 
     const amount = Math.round(Number(order.amount) * 100);
     const createDate = formatDate(new Date());
-    const expireDate = formatDate(new Date(Date.now() + 15 * 60 * 1000));
-    // LUÔN sinh txnRef mới cho mỗi lần tạo URL thanh toán.
-    // VNPay coi txnRef là unique reference cho 1 transaction attempt và sẽ
-    // reject với lỗi "Giao dịch đang được xử lý hoặc đã quá thời gian" nếu
-    // txnRef trùng với lần submit trước đó (kể cả khi lần trước fail/timeout).
-    // Order vẫn được identify qua _id; paymentGatewayTxnRef chỉ dùng để match
-    // callback return/IPN gần nhất từ VNPay.
-    const txnRef = `ORD${order._id.toString().slice(-8)}${Date.now()}`;
+    // Reuse txnRef nếu đã có để tránh mất giao dịch khi user bấm thanh toán lại.
+    // Chỉ sinh mới khi order chưa từng khởi tạo URL thanh toán.
+    const txnRef =
+      order.paymentGatewayTxnRef ||
+      `ORD${order._id.toString().slice(-8)}${Date.now()}`;
     const returnUrl = `${getBackendBaseUrl()}/api/orders/payment/vnpay-return`;
 
-    order.paymentGatewayTxnRef = txnRef;
+    if (!order.paymentGatewayTxnRef) {
+      order.paymentGatewayTxnRef = txnRef;
+    }
     order.paymentStatus = "pending";
     order.failedAt = undefined;
     await order.save();
 
+    // OrderInfo chỉ nên chứa ký tự ASCII (không dấu) để đảm bảo signature khớp
+    // qua mọi middleware encoding. Strip dấu tiếng Việt để an toàn tuyệt đối.
+    const stripDiacritics = (str = "") =>
+      String(str)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d")
+        .replace(/Đ/g, "D");
+
+    // Khớp tuyệt đối với VNPay Node.js sample code (github.com/vnpay/sample-code).
+    // KHÔNG include vnp_ExpireDate — không có trong sample, một số sandbox merchant
+    // reject signature khi có field này.
     const params = {
       vnp_Version: VNPAY_VERSION,
       vnp_Command: VNPAY_COMMAND,
       vnp_TmnCode: tmnCode,
-      vnp_Amount: amount,
-      vnp_CreateDate: createDate,
-      vnp_CurrCode: VNPAY_CURR_CODE,
-      vnp_IpAddr: getClientIp(req),
       vnp_Locale: VNPAY_LOCALE,
-      vnp_OrderInfo: `Thanh toan khoa hoc ${order.courseName}`,
-      vnp_OrderType: VNPAY_ORDER_TYPE,
-      vnp_ReturnUrl: returnUrl,
+      vnp_CurrCode: VNPAY_CURR_CODE,
       vnp_TxnRef: txnRef,
-      vnp_ExpireDate: expireDate,
+      vnp_OrderInfo: stripDiacritics(
+        `Thanh toan khoa hoc ${order.courseName || ""}`,
+      ).slice(0, 255),
+      vnp_OrderType: VNPAY_ORDER_TYPE,
+      vnp_Amount: amount,
+      vnp_ReturnUrl: returnUrl,
+      vnp_IpAddr: getClientIp(req),
+      vnp_CreateDate: createDate,
     };
 
     const sortedParams = sortObjectByKey(params);
+    const signData = buildQueryString(sortedParams);
     const signature = buildSignature(sortedParams, hashSecret);
     const paymentUrl = `${vnpUrl}?${buildQueryString({
       ...sortedParams,
       vnp_SecureHash: signature,
     })}`;
 
-    return res.json({ success: true, paymentUrl, orderId: order._id });
+    // Debug log để chẩn đoán khi VNPay trả "Sai chữ ký" (code 70).
+    // Chỉ in khi LOG_LEVEL=debug, không lộ secret.
+    logger.debug(
+      {
+        orderId: String(order._id),
+        tmnCode,
+        tmnCodeLength: tmnCode.length,
+        secretLength: hashSecret.length,
+        ipAddr: params.vnp_IpAddr,
+        signDataLength: signData.length,
+        signDataPreview: signData.slice(0, 200),
+        signaturePreview: signature.slice(0, 16) + "...",
+      },
+      "VNPay payment URL built",
+    );
+
+    const response = { success: true, paymentUrl, orderId: order._id };
+    // Dev-mode: trả signData + signature để tester verify thủ công.
+    if (process.env.NODE_ENV !== "production") {
+      response.debug = {
+        signData,
+        signature,
+        tmnCodeLength: tmnCode.length,
+        secretLength: hashSecret.length,
+        ipAddr: params.vnp_IpAddr,
+        paramsCount: Object.keys(sortedParams).length,
+      };
+    }
+    return res.json(response);
   } catch (error) {
     logger.error({ err: error }, "Error creating VNPay URL");
     return res
