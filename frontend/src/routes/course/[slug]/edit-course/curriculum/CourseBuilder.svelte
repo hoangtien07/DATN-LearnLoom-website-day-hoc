@@ -1,6 +1,5 @@
 <script>
   import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
   import { page } from "$app/stores";
   import CurriculumSidebar from "./CurriculumSidebar.svelte";
   import {
@@ -8,6 +7,7 @@
     fetchLessonById,
     updateLesson,
   } from "$lib/js/api";
+  import { pushToast } from "$lib/stores/toast.js";
 
   let course = {};
   let selectedLesson = null; // Bài học được chọn
@@ -32,9 +32,13 @@
 
   // Lưu thay đổi cho bài học
   const saveLesson = async () => {
-    if (selectedLesson) {
+    if (!selectedLesson) return;
+    try {
       await updateLesson(selectedLesson, lessonContent);
-      alert("Lưu bài học thành công!");
+      pushToast("Đã lưu bài học.", { variant: "success" });
+    } catch (err) {
+      console.error("Error saving lesson:", err);
+      pushToast("Không lưu được bài học.", { variant: "error" });
     }
   };
 </script>

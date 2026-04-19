@@ -12,6 +12,8 @@
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
   import { user, fetchUser } from "../../../../stores/auth";
+  import { pushToast } from "$lib/stores/toast.js";
+  import { confirm as uiConfirm } from "$lib/stores/confirm.js";
 
   const slug = $page.params.slug;
   let itemId;
@@ -237,13 +239,20 @@
 
   // Hàm xóa bình luận
   const handleDeleteComment = async (commentId) => {
-    if (confirm("Bạn có chắc chắn muốn xóa bình luận này?")) {
-      try {
-        await deleteComment(commentId);
-        comments = comments.filter((comment) => comment._id !== commentId);
-      } catch (error) {
-        console.error("Error deleting comment:", error);
-      }
+    const ok = await uiConfirm({
+      title: "Xóa bình luận",
+      message: "Bạn có chắc chắn muốn xóa bình luận này?",
+      confirmLabel: "Xóa",
+      variant: "danger",
+    });
+    if (!ok) return;
+    try {
+      await deleteComment(commentId);
+      comments = comments.filter((comment) => comment._id !== commentId);
+      pushToast("Đã xóa bình luận.", { variant: "success" });
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      pushToast("Không xóa được bình luận.", { variant: "error" });
     }
   };
 
@@ -312,8 +321,11 @@
         }
       } else {
         // Nếu đã là bài học cuối cùng của khóa học
-        alert("Bạn đã hoàn thành khóa học!");
-        goto(`/course/${slug}`); // Quay lại trang khóa học
+        pushToast("🎉 Bạn đã hoàn thành khóa học!", {
+          variant: "success",
+          durationMs: 5000,
+        });
+        goto(`/course/${slug}`);
       }
     }
   };
@@ -341,7 +353,7 @@
         );
       } else {
         // Nếu đã là bài học/bài tập đầu tiên của khóa học
-        alert("Đây đã là bài đầu tiên!");
+        pushToast("Đây đã là bài đầu tiên!", { variant: "info" });
       }
     }
   };

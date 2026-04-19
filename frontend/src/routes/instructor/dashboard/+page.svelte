@@ -21,6 +21,8 @@
   } from "@sveltestrap/sveltestrap";
   import CourseList from "$lib/components/CourseList.svelte";
   import InstructorWorkspaceNav from "../InstructorWorkspaceNav.svelte";
+  import { pushToast } from "$lib/stores/toast.js";
+  import { confirm as uiConfirm } from "$lib/stores/confirm.js";
 
   $: teacher = user;
   let courses = [];
@@ -185,15 +187,20 @@
   };
 
   const handleSoftDeleteHidden = async (course) => {
-    if (
-      !confirm(`Xóa mềm khóa học "${course.name}"? Admin vẫn có thể khôi phục.`)
-    )
-      return;
+    const ok = await uiConfirm({
+      title: "Xóa mềm khóa học",
+      message: `Xóa mềm khóa học "${course.name}"? Admin vẫn có thể khôi phục sau.`,
+      confirmLabel: "Xóa mềm",
+      variant: "danger",
+    });
+    if (!ok) return;
     try {
       await deleteCourse(course.slug);
       hiddenCourses = hiddenCourses.filter((c) => c.slug !== course.slug);
+      pushToast("Đã xóa mềm khóa học.", { variant: "success" });
     } catch (err) {
       console.error(err);
+      pushToast("Không xóa được khóa học.", { variant: "error" });
     }
   };
 
@@ -353,11 +360,13 @@
       }
 
       if (action === "hide") {
-        if (
-          !confirm(
-            `Bạn có chắc muốn ẩn ${selected.length} khóa học đã chọn? Học viên sẽ không còn nhìn thấy các khóa học này.`,
-          )
-        ) {
+        const ok = await uiConfirm({
+          title: "Ẩn hàng loạt",
+          message: `Bạn có chắc muốn ẩn ${selected.length} khóa học đã chọn? Học viên sẽ không còn nhìn thấy.`,
+          confirmLabel: "Ẩn",
+          variant: "danger",
+        });
+        if (!ok) {
           isBulkActing = false;
           return;
         }

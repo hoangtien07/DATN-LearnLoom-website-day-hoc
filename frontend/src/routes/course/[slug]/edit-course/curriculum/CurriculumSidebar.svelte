@@ -18,6 +18,8 @@
     ModalFooter,
     Input,
   } from "@sveltestrap/sveltestrap";
+  import { pushToast } from "$lib/stores/toast.js";
+  import { confirm as uiConfirm } from "$lib/stores/confirm.js";
 
   export let course;
   const dispatch = createEventDispatcher();
@@ -188,15 +190,22 @@
   };
 
   const handleDeleteSection = async (section) => {
-    if (confirm(`Bạn có chắc chắn muốn xóa chương "${section.name}" ?`)) {
-      try {
-        await deleteSection(course.slug, section._id);
-        course = await fetchCourseBySlug(course.slug);
-        setStatus("Đã xóa chương.", "success");
-      } catch (error) {
-        console.error("Error deleting section:", error);
-        setStatus("Không thể xóa chương.", "error");
-      }
+    const ok = await uiConfirm({
+      title: "Xóa chương",
+      message: `Bạn có chắc chắn muốn xóa chương "${section.name}"?`,
+      confirmLabel: "Xóa",
+      variant: "danger",
+    });
+    if (!ok) return;
+    try {
+      await deleteSection(course.slug, section._id);
+      course = await fetchCourseBySlug(course.slug);
+      setStatus("Đã xóa chương.", "success");
+      pushToast("Đã xóa chương.", { variant: "success" });
+    } catch (error) {
+      console.error("Error deleting section:", error);
+      setStatus("Không thể xóa chương.", "error");
+      pushToast("Không xóa được chương.", { variant: "error" });
     }
   };
 
@@ -207,15 +216,22 @@
 
   const handleDeleteItem = async (sectionId, item) => {
     const itemName = itemNames[item.itemId] || "mục nội dung";
-    if (confirm(`Bạn có chắc chắn muốn xóa "${itemName}" ?`)) {
-      try {
-        await deleteItem(course.slug, sectionId, item.itemId);
-        course = await fetchCourseBySlug(course.slug);
-        setStatus("Đã xóa mục nội dung.", "success");
-      } catch (error) {
-        console.error("Error deleting item:", error);
-        setStatus("Không thể xóa mục nội dung.", "error");
-      }
+    const ok = await uiConfirm({
+      title: "Xóa nội dung",
+      message: `Bạn có chắc chắn muốn xóa "${itemName}"?`,
+      confirmLabel: "Xóa",
+      variant: "danger",
+    });
+    if (!ok) return;
+    try {
+      await deleteItem(course.slug, sectionId, item.itemId);
+      course = await fetchCourseBySlug(course.slug);
+      setStatus("Đã xóa mục nội dung.", "success");
+      pushToast("Đã xóa nội dung.", { variant: "success" });
+    } catch (error) {
+      console.error("Error deleting item:", error);
+      setStatus("Không thể xóa mục nội dung.", "error");
+      pushToast("Không xóa được nội dung.", { variant: "error" });
     }
   };
 

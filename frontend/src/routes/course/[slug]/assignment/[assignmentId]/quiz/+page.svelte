@@ -4,6 +4,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
   import { user, fetchUser } from "../../../../../../stores/auth";
+  import { pushToast } from "$lib/stores/toast.js";
 
   let assignmentId = $page.params.assignmentId;
   let slug = $page.params.slug;
@@ -45,7 +46,9 @@
         info = "Đã quá thời gian làm bài. Chuyển sang trang kết quả.";
         goto(`/course/${slug}/learn/assignment/${assignmentId}/result`);
       } else {
-        alert(error?.response?.data?.message || "Không nộp được bài.");
+        pushToast(error?.response?.data?.message || "Không nộp được bài.", {
+          variant: "error",
+        });
       }
     } finally {
       isSubmitting = false;

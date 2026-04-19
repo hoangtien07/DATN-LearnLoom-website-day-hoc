@@ -22,6 +22,8 @@
     Input,
     Table,
   } from "@sveltestrap/sveltestrap";
+  import { pushToast } from "$lib/stores/toast.js";
+  import { confirm as uiConfirm } from "$lib/stores/confirm.js";
   let searchQuery = "";
   // Hàm lọc danh sách khóa học dựa trên searchQuery
   $: filteredCourses = courses.filter((course) =>
@@ -86,27 +88,40 @@
   };
 
   const handleRestoreCourse = async (courseSlug) => {
-    if (confirm("Đây khôi phục khóa học này?")) {
-      try {
-        await restoreDeletedCourse(courseSlug);
-        deletedCourses = deletedCourses.filter((c) => c.slug !== courseSlug);
-      } catch (error) {
-        console.error("Error restoring course:", error);
-      }
+    const ok = await uiConfirm({
+      title: "Khôi phục khóa học",
+      message: "Bạn có chắc muốn khôi phục khóa học này?",
+      confirmLabel: "Khôi phục",
+    });
+    if (!ok) return;
+    try {
+      await restoreDeletedCourse(courseSlug);
+      deletedCourses = deletedCourses.filter((c) => c.slug !== courseSlug);
+      pushToast("Đã khôi phục khóa học.", { variant: "success" });
+    } catch (error) {
+      console.error("Error restoring course:", error);
+      pushToast("Không khôi phục được.", { variant: "error" });
     }
   };
 
   const handleDeleteCourse = async (courseSlug) => {
-    if (confirm("Bạn có chắc chắn muốn xóa khóa học này?")) {
-      try {
-        isDeleting = true;
-        await deleteCourse(courseSlug);
-        courses = courses.filter((course) => course.slug !== courseSlug);
-      } catch (error) {
-        console.error("Error deleting course:", error);
-      } finally {
-        isDeleting = false;
-      }
+    const ok = await uiConfirm({
+      title: "Xóa khóa học",
+      message: "Bạn có chắc chắn muốn xóa khóa học này?",
+      confirmLabel: "Xóa",
+      variant: "danger",
+    });
+    if (!ok) return;
+    try {
+      isDeleting = true;
+      await deleteCourse(courseSlug);
+      courses = courses.filter((course) => course.slug !== courseSlug);
+      pushToast("Đã xóa khóa học.", { variant: "success" });
+    } catch (error) {
+      console.error("Error deleting course:", error);
+      pushToast("Không xóa được khóa học.", { variant: "error" });
+    } finally {
+      isDeleting = false;
     }
   };
 
@@ -114,7 +129,6 @@
     event?.preventDefault();
 
     try {
-      // Validate dữ liệu newCourse (bạn cần tự thêm logic validation)
       if (
         !newCourse.name ||
         !newCourse.summary ||
@@ -123,13 +137,17 @@
         !newCourse.slug ||
         !newCourse.totalDuration
       ) {
-        alert("Vui lòng điền đầy đủ thông tin khóa học.");
+        pushToast("Vui lòng điền đầy đủ thông tin khóa học.", {
+          variant: "warn",
+        });
         return;
       }
 
       const parsedDuration = Number(newCourse.totalDuration);
       if (!Number.isFinite(parsedDuration) || parsedDuration <= 0) {
-        alert("Tổng thời lượng phải là số giờ lớn hơn 0.");
+        pushToast("Tổng thời lượng phải là số giờ lớn hơn 0.", {
+          variant: "warn",
+        });
         return;
       }
 
@@ -140,11 +158,16 @@
       };
 
       const createdCourse = await createCourse(payload);
-      courses = [...courses, createdCourse]; // Thêm khóa học mới vào danh sách
+      courses = [...courses, createdCourse];
       showCreateModal = false;
-      goto(`/admin/course-management`); // Chuyển hướng đến trang quản lý khóa học
+      pushToast("Đã tạo khóa học.", { variant: "success" });
+      goto(`/admin/course-management`);
     } catch (error) {
       console.error("Error creating course:", error);
+      pushToast(
+        error?.response?.data?.message || "Không tạo được khóa học.",
+        { variant: "error" },
+      );
     }
   };
 </script>

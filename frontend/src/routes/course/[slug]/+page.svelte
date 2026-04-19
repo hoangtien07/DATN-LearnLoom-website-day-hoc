@@ -17,6 +17,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
   import { sanitizeHtml } from "$lib/js/sanitize";
+  import { pushToast } from "$lib/stores/toast.js";
   import Reviews from "./Reviews.svelte";
 
   let course = {};
@@ -281,21 +282,24 @@
           }
 
           console.error("VNPay URL creation failed:", paymentResponse.message);
-          alert("Không thể khởi tạo thanh toán. Vui lòng thử lại.");
+          pushToast("Không thể khởi tạo thanh toán. Vui lòng thử lại.", {
+            variant: "error",
+          });
         } else {
           console.error("Order creation failed:", orderResponse.message);
-          alert("Không thể tạo đơn thanh toán. Vui lòng thử lại.");
+          pushToast("Không thể tạo đơn thanh toán. Vui lòng thử lại.", {
+            variant: "error",
+          });
         }
       } else {
         await enrollCourse(slug, $user._id);
         isEnrolled = true;
-        // Refresh user data after enrollment
         await fetchUser();
-        alert("Bạn đã đăng ký khóa học thành công!");
+        pushToast("Đã đăng ký khóa học thành công!", { variant: "success" });
       }
     } catch (error) {
       console.error("Error enrolling in course:", error);
-      alert("Đã xảy ra lỗi khi đăng ký khóa học.");
+      pushToast("Đã xảy ra lỗi khi đăng ký khóa học.", { variant: "error" });
     }
   };
 

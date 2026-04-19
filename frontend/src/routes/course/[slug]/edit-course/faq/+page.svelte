@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { page } from "$app/stores";
   import { fetchCourseBySlug, updateCourse } from "$lib/js/api";
+  import { confirm as uiConfirm } from "$lib/stores/confirm.js";
 
   let course = null;
   let slug = $page.params.slug;
@@ -74,10 +75,13 @@
       return;
     }
 
-    const confirmDelete = confirm(`Xóa FAQ: "${targetFaq.question}" ?`);
-    if (!confirmDelete) {
-      return;
-    }
+    const confirmDelete = await uiConfirm({
+      title: "Xóa FAQ",
+      message: `Xóa câu hỏi: "${targetFaq.question}"?`,
+      confirmLabel: "Xóa",
+      variant: "danger",
+    });
+    if (!confirmDelete) return;
 
     const nextFaqs = course.faqs.filter((_, i) => i !== index);
     await persistFaqs(nextFaqs);

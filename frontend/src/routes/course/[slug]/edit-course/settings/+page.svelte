@@ -12,6 +12,7 @@
     unhideCourse,
   } from "$lib/js/api";
   import Editor from "cl-editor";
+  import { confirm as uiConfirm } from "$lib/stores/confirm.js";
 
   let course;
   let slug = $page.params.slug;
@@ -130,10 +131,13 @@
     if (isSaving) return;
 
     if (course.visible) {
-      const confirmed = window.confirm(
-        `Bạn có chắc muốn ẩn khóa học "${course.name}"? Học viên sẽ không nhìn thấy khóa học này.`,
-      );
-      if (!confirmed) return;
+      const ok = await uiConfirm({
+        title: "Ẩn khóa học",
+        message: `Bạn có chắc muốn ẩn khóa học "${course.name}"? Học viên sẽ không nhìn thấy khóa học này.`,
+        confirmLabel: "Ẩn",
+        variant: "danger",
+      });
+      if (!ok) return;
     }
 
     isSaving = true;

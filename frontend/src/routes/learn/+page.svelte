@@ -8,6 +8,7 @@
     addCourseToFavorites,
     removeCourseFromFavorites,
   } from "$lib/js/api";
+  import { confirm as uiConfirm } from "$lib/stores/confirm.js";
   import { getTime } from "$lib/js/function";
   import { user, fetchUser } from "../../stores/auth";
   import { Progress } from "@sveltestrap/sveltestrap";
@@ -244,9 +245,11 @@
   const removeFavoriteWithConfirm = async (course) => {
     if (!$user || !course?._id) return;
 
-    const confirmed = window.confirm(
-      `Bạn có chắc muốn bỏ yêu thích khóa học "${course.name}"?`,
-    );
+    const confirmed = await uiConfirm({
+      title: "Bỏ yêu thích",
+      message: `Bạn có chắc muốn bỏ yêu thích khóa học "${course.name}"?`,
+      confirmLabel: "Bỏ yêu thích",
+    });
 
     if (!confirmed) return;
 
